@@ -2,6 +2,12 @@
   <img src=https://github.com/Astro-Sean/autophot/blob/master/logo.jpg>
 </p>
 
+[![Anaconda-Server Badge](https://anaconda.org/astro-sean/autophot/badges/version.svg)](https://anaconda.org/astro-sean/autophot)
+
+
+[![Anaconda-Server Badge](https://anaconda.org/astro-sean/autophot/badges/latest_release_date.svg)](https://anaconda.org/astro-sean/autophot)
+
+
 ## Description
 
 A core part of my PhD is the development and publishing of AutoPHoT, an
