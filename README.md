@@ -37,12 +37,16 @@ email: sean.brennan2@ucdconnect.ie [subject: github autophot]
 
 ## Installation
 
-* Based on latest version of Python3.
+* Install via conda:
+
+```python
+conda install -c astro-sean autophot
+```
 
 * Code relies on [Astrometry.net](https://arxiv.org/abs/0910.2233) by Dustin Lang to solve for world coordinates system (WCS). Code can be downloaded/installed [here](http://astrometry.net/doc/readme.html) and [here](http://astrometry.net/doc/build.html#build.)
 Once installed, locate the solve-field executable [default location: /usr/local/astrometry/bin/solve-field] and update (if needed) 'solve field exe loc' in input.yml.
 
-* If an image template is downloaded from the [PanSTARRs  server]((https://ps1images.stsci.edu/cgi-bin/ps1cutouts)) - image subtraction is available - using [HOTPANTS](http://www.ascl.net/1504.004) by Andy Becker - HOTPANTS can be found [here](https://github.com/acbecker/)
+* Image subtraction uses [HOTPANTS](http://www.ascl.net/1504.004) by Andy Becker - HOTPANTS can be found [here](https://github.com/acbecker/)
 Known error with installation if installing on MacOS - if upon installation you get 'malloc.h' file not found, replace
 
 ```c
