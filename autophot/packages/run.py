@@ -1,0 +1,452 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Feb  5 09:08:45 2019
+
+@author: seanbrennan
+"""
+from __future__ import absolute_import
+
+def run_autophot(syntax):
+
+    from autophot.packages.functions import getheader
+    from autophot.packages.check_tns import TNS_query
+    from autophot.packages.call_yaml import yaml_syntax as cs
+    from autophot.packages.write_yaml import teledata2yml
+    from autophot.packages.main import main
+
+
+    import os
+    import sys
+    import pathlib
+    import pandas as pd
+    from os.path import dirname
+    import inspect
+    import re
+    import numpy as np
+
+
+
+    flist_new = []
+    files_removed = 0
+    filter_removed = 0
+    wrong_file_removed = 0
+
+    def border_msg(msg):
+        row = len(msg)+2
+        h = ''.join(['+'] + ['-' *row] + ['+'])
+        result= h + '\n'"| "+msg+" |"'\n' + h
+        print('\n'+result)
+
+    #==================================================================
+    # Original Data is not altered
+    # Create new directory within working directory
+    #==================================================================
+
+    if syntax['fname']:
+        flist = [syntax['fname']]
+
+    else:
+        new_dir = '_' + syntax['outdir_name']
+        base_dir = os.path.basename(syntax['fits_dir']).replace(new_dir,'')
+        work_loc = base_dir + new_dir
+        pathlib.Path(dirname(syntax['fits_dir'])+'/'+work_loc).mkdir(parents = True, exist_ok=True)
+        os.chdir(dirname(syntax['fits_dir'])+'/'+work_loc)
+
+        flist = []
+
+        # Search for .fits files with template or subtraction in it
+        for root, dirs, files in os.walk(syntax['fits_dir']):
+            for fname in files:
+                if fname.endswith((".fits",'.fit','.fts')):
+                    if 'templates' not in root and 'template' not in syntax['fits_dir']:
+                        if 'template' not in fname and 'template' not in syntax['fits_dir'] :
+                            if 'subtraction' not in fname:
+                                if 'WCS' not in fname:
+                                    flist.append(os.path.join(root, fname))
+
+    if syntax['restart']:
+
+        """
+        Pick up where left out in output folder
+        Search for output file in each folder
+        """
+
+        flist_before = []
+
+        for i in flist:
+            path,file = os.path.split(i)
+            clean_path = path + '/' + file
+            flist_before.append(i.replace('_APT','').replace(' ','_').replace('_'+syntax['outdir_name'],''))
+
+        len_before = len(flist)
+
+        print('\n* Restarting - checking for files in %s \n' % (syntax['fits_dir']+'_'+syntax['outdir_name']).replace(' ',''))
+
+        flist_restart = []
+        ending = '_'+syntax['outdir_name']
+
+        for root, dirs, files in os.walk((syntax['fits_dir']+'_'+syntax['outdir_name']).replace(' ','')):
+            for fname in files:
+                if fname.endswith(("_APT.fits",'_APT.fit','_APT.fts')):
+
+
+                    if os.path.isfile(os.path.join(root, fname)) and os.path.isfile(os.path.join(root,'out.csv')):
+
+
+                        dirpath_clean_up = os.path.join(root, fname).replace(ending,'')
+                        path,file = os.path.split(dirpath_clean_up)
+
+                        clean_path = path.split('/')[:-1]
+
+
+                        clean_path_new = '/'.join(clean_path) + '/'+file
+                        flist_restart.append(clean_path_new.replace('_APT','').replace(' ','_').replace('_'+syntax['outdir_name'],''))
+
+        if len(flist_before) ==0:
+            print('No ouput files found - skipping ')
+        else:
+
+            flist_bool = [False if f in flist_restart else True for f in flist_before]
+
+            flist = list(np.array(flist)[np.array(flist_bool)])
+
+            len_after = len(flist)
+
+            print('\nTotal Files: %s \n' % str(len_before))
+
+            print('\nFiles already done: %s \n' % ( str(len_before - len_after)))
+
+            files_removed += len_before - len_after
+
+
+# =============================================================================
+#     Go through files, check if I have their details
+# =============================================================================
+
+    syntax = teledata2yml(syntax,flist)
+
+
+# =============================================================================
+# Import catalog specific naming conventions installed during autophot installation
+# For new catalog: please email developer
+# =============================================================================
+
+    filepath ='/'.join(os.path.dirname(os.path.abspath(__file__)).split('/')[0:-1])
+
+    catalog_syntax_yml = 'catalog.yml'
+    catalog_syntax = cs(os.path.join(filepath+'/databases',catalog_syntax_yml),syntax['catalog']).load_vars()
+
+    if syntax['catalog'] == 'custom':
+       currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+       dir_name = currentdir+'/'+'catalog_queries'
+       catalog_dir = syntax['catalog']
+       target = syntax['target_name']
+       target_dir =  dir_name + '/' + catalog_dir+'/'+target.lower()
+       fname = str(target) + '_RAD_' + str(float(syntax['radius']))
+
+       if syntax['force_catalog_csv']:
+           print('Using '+syntax['force_catalog_csv_name']+' as catalog')
+           fname = str(syntax['force_catalog_csv_name']) + '_RAD_' + str(float(syntax['radius']))
+
+       custom_table_data =pd.read_csv(target_dir +'/'+ fname+'.csv')
+       available_filters = [i for i,_ in catalog_syntax.items() if i in list(custom_table_data.columns)]
+
+    else:
+        available_filters = [i for i,_ in catalog_syntax.items()]
+
+
+
+# =============================================================================
+# load specific telescope data - Useer shoud include this in setup
+# =============================================================================
+
+    tele_syntax_yml = 'telescope.yml'
+    tele_syntax = cs(os.path.join(syntax['wdir'],tele_syntax_yml) ).load_vars()
+
+# =============================================================================
+# Checking for target information
+# =============================================================================
+
+    if syntax['master_warnings']:
+        import warnings
+        warnings.filterwarnings("ignore")
+
+    target_name = syntax['target_name']
+
+    '''
+    If no source information is given i.e look at a specific object
+    Will query Transient Name Server Server for target information
+    '''
+
+    if syntax['target_name'] != None:
+
+        if os.path.isfile(syntax['wdir'] + 'tns_objects'+'/'+(target_name)+'.yml'):
+
+            TNS_response = cs(syntax['wdir'] + 'tns_objects'+'/'+target_name+'.yml',target_name).load_vars()
+        else:
+            try:
+                print('\n> Checking TNS for %s information <' % syntax['target_name'])
+
+                TNS_obj = TNS_query(target_name)
+
+                TNS_response = TNS_obj.get_coords()
+
+                cs.create_yaml(syntax['wdir'] + 'tns_objects'+'/'+(target_name)+'.yml',TNS_response)
+
+            except Exception as e:
+                exc_type, exc_obj, exc_tb = sys.exc_info()
+                fname1 = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                print(exc_type, fname1, exc_tb.tb_lineno,e)
+                sys.exit("Can't reach Server - Check Internet Connection!")
+    else:
+
+        TNS_response = {}
+
+
+# =============================================================================
+# Checking that selected catalog has appropiate fioters - if not remove
+# =============================================================================
+
+    print('\n> Checking: Filters')
+
+    for name in flist:
+
+        root = dirname(name)
+
+        fname = os.path.basename(name)
+
+        try:
+            headinfo = getheader(name)
+
+            try:
+                inst = str(headinfo['TELESCOP'])
+
+            except:
+                if syntax['ignore_no_telescop']:
+                    inst = 'UNKNOWN'
+                    print('Telescope name not given - setting to UNKNOWN')
+                else:
+                    print('Available TELESCOP:' + '\n'+str(list(tele_syntax))+ '\n')
+                    inst = input('-> TELESCOP NOT FOUND; Enter telescope name: ')
+
+            if inst.strip() == '':
+                inst = 'UNKNOWN'
+                headinfo['TELESCOP'] = inst
+
+            pass
+
+            # Default filter key name
+            filter_header = 'filter_key_0'
+            '''
+            Go through filter keywords filter_key_[1..2..3..etc] looking for one that works
+            '''
+            while True:
+
+                if tele_syntax[inst][filter_header] not in list(headinfo.keys()):
+                    old_n = int(re.findall(r"[-+]?\d*\.\d+|\d+", filter_header)[0])
+                    filter_header = filter_header.replace(str(old_n),str(old_n+1))
+                elif tele_syntax[inst][filter_header].lower() == 'clear':
+                    continue
+                else:
+                    break
+            try:
+                fits_filter = headinfo[tele_syntax[inst][filter_header]]
+            except:
+                fits_filter = 'no_filter'
+
+            # If filter keword is clear, set to 'force_filter', usually r
+            if fits_filter.lower() == 'clear':
+                fits_filter = syntax['force_filter']
+
+            try:
+                filter_name = tele_syntax[inst][str(fits_filter)]
+            except:
+                filter_name = str(fits_filter)
+            try:
+                if headinfo['IMAGETYP'].lower() in ['bias','zero','flat']:
+                    wrong_file_removed+=1
+                    files_removed+=1
+                    # print('\n* Removed file: %s -> invalid images[%s] *\n' % (str(fname),str(headinfo['IMAGETYP'].lower())))
+                    continue
+            except:
+                pass
+
+            if not filter_name in available_filters:
+                files_removed+=1
+                filter_removed+=1
+                # print('\n* Removed file: %s: Filter not in catalog *\n' % str(fname))
+                continue
+
+            if syntax['select_filter']:
+                try:
+                    if str(tele_syntax[inst][str(fits_filter)]) not in syntax['do_filter']:
+                        files_removed+=1
+                        filter_removed+=1
+                        # print('\n* Removed file: %s: Filter not selected *\n' % str(fname))
+                        continue
+                except:
+                    files_removed+=1
+                    continue
+
+            flist_new.append(name)
+
+        except Exception as e:
+
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname1 = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            print(exc_type, fname1, exc_tb.tb_lineno,e)
+            continue
+
+    flist = flist_new
+
+    print('\nFiles removed - Wrong Image: %s\n' % wrong_file_removed)
+
+    print('\nFiles removed - No filter: %s\n' % filter_removed)
+
+    print('\nFiles removed - Total: %s\n' % files_removed)
+
+    if len(flist) > 500:
+            ans = str(input('> More than 500 .fits files [%s] -  do you want to continue? [y]: ' % len(flist)) or 'y')
+            if  ans != 'y':
+                raise Exception('Exited AutoPHoT - file number size issue')
+
+# =============================================================================
+# Single processing chain
+# =============================================================================
+
+    if syntax['method'] == 'sp':
+        sp_output = []
+        n=0
+        for i in (flist):
+
+            n+=1
+            border_msg('File: %s / %s' % (n,len(flist)))
+            out = main(TNS_response,syntax,i)
+            sp_output.append(out)
+
+        with open(str(syntax['outcsv_name'])+'.csv', 'a'):
+                pass
+
+        sp_output_data = [x[0] for x in sp_output if x[0] is not None]
+
+        output_total_fail = [x[1] for x in sp_output if x[0] is None]
+
+        print('\n---')
+        print('\nTotal failure :',output_total_fail)
+
+        new_entry = pd.DataFrame(sp_output_data)
+        new_entry = new_entry.applymap(lambda x: x if isinstance(x, list) else x )
+
+        try:
+            data = pd.read_csv(str(syntax['outcsv_name']+'.csv'),error_bad_lines=False)
+            update_data = pd.concat([data,new_entry],axis = 0,sort = False,ignore_index = True)
+        except pd.io.common.EmptyDataError:
+            update_data = new_entry
+            pass
+        try:
+            update_data.to_csv(str(syntax['outcsv_name']+'.csv'),index = False)
+        except Exception as e:
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname1 = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            print(exc_type, fname1, exc_tb.tb_lineno,e)
+            print('CANNOT UPDATE OUTPUT CSV')
+
+        print('\nDONE')
+        return
+
+# =============================================================================
+#  Parallelism execution - work in progress - doesn't work right now
+# =============================================================================
+
+    if syntax['method'] == 'mp':
+        import multiprocessing
+
+        import os
+        import signal
+        from functools import partial
+        from tqdm import tqdm
+
+        def main_mp():
+
+
+
+            original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+            pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+
+            signal.signal(signal.SIGINT, original_sigint_handler)
+
+            func = partial(main, TNS_response,syntax)
+
+            chunksize, extra = divmod(len(flist) , 4 * multiprocessing.cpu_count())
+            if extra:
+                chunksize += 1
+            print('\n'+'Chunksize:' ,chunksize)
+
+            mp_output = []
+            try:
+                try:
+                    for n in tqdm(pool.imap_unordered(func, flist,chunksize = chunksize), total=len(flist)):
+                        mp_output.append(n)
+                        pass
+
+                except KeyboardInterrupt:
+                    print('Early Termination')
+                    print(pool._pool)
+                    pool.terminate()
+
+                    for p in pool._pool:
+                       if p.exitcode is None:
+                           p.terminate()
+            except Exception as e:
+
+                exc_type, exc_obj, exc_tb = sys.exc_info()
+                fname1 = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                print(exc_type, fname1, exc_tb.tb_lineno,e)
+
+            pool.close()
+            pool.join()
+
+            for p in pool._pool:
+               if p.exitcode is None:
+                   p.terminate()
+
+            with open(str(syntax['outcsv_name'])+'.csv', 'a'):
+                    pass
+
+            mp_output_data = [x[0] for x in mp_output if x[0] is not None]
+
+            output_total_fail = [[x[1] for x in mp_output if x[0] is None]]
+            print()
+            print('Total failure :',output_total_fail)
+
+            new_entry = pd.DataFrame(mp_output_data)
+            new_entry = new_entry.applymap(lambda x: x if isinstance(x, list) else x )
+
+            try:
+                data = pd.read_csv(str(syntax['outcsv_name']+'.csv'),error_bad_lines=False)
+                update_data = pd.concat([data,new_entry],axis = 0,sort = False,ignore_index = True)
+            except pd.io.common.EmptyDataError:
+                update_data = new_entry
+                pass
+            try:
+                update_data.to_csv(str(syntax['outcsv_name']+'.csv'),index = False)
+            except Exception as e:
+                exc_type, exc_obj, exc_tb = sys.exc_info()
+                fname1 = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                print(exc_type, fname1, exc_tb.tb_lineno,e)
+                print('CANNOT UPDATE OUTPUT CSV')
+
+            print()
+            print('DONE')
+            return
+        main_mp()
+
+
+
+
+
+
+
+

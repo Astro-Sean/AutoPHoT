@@ -1,0 +1,34 @@
+package:
+  name: autophot
+  version: 0.0.1
+
+source:
+  path: ../
+
+requirements:
+  build:
+    - python
+    - setuptools
+  run:
+    - python >=3.6
+    - numpy >=1.18.1
+    - pandas >=1.0.3
+    - astropy >=4.0
+    - pyyaml >=5.3.1
+    - lmfit >=1.0.0
+    - matplotlib
+    - astroquery >=0.4
+    - astroscrappy >=1.0.8
+    - photutils >=0.7.2
+    - pickle5
+
+test:
+  imports:
+    - autophot
+
+about:
+  home: https://github.com/Astro-Sean/autophot
+  license: CCBY-SA4
+  license_file: license
+  description: Automated Photometry of Transients Photometric Pipeline
+  summary: Initial upload - Not yet open to users
