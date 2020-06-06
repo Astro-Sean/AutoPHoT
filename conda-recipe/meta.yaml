@@ -22,6 +22,10 @@ requirements:
     - photutils >=0.7.2
     - pickle5
 
+test:
+  imports:
+    - autophot
+
 about:
   home: https://github.com/Astro-Sean/autophot
   license: CCBY-SA4
