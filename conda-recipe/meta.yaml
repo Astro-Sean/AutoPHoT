@@ -22,13 +22,9 @@ requirements:
     - photutils >=0.7.2
     - pickle5
 
-test:
-  imports:
-    - autophot
-
 about:
   home: https://github.com/Astro-Sean/autophot
   license: CCBY-SA4
   license_file: license
   description: Automated Photometry of Transients Photometric Pipeline
-  summary: Initial upload - Not yet open to users
+  summary: Preparing initial upload

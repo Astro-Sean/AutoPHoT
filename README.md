@@ -2,8 +2,12 @@
   <img src=https://github.com/Astro-Sean/autophot/blob/master/logo.jpg>
 </p>
 
+
+<div align="center">
+
 [![Anaconda-Server Badge](https://anaconda.org/astro-sean/autophot/badges/version.svg)](https://anaconda.org/astro-sean/autophot) [![Anaconda-Server Badge](https://anaconda.org/astro-sean/autophot/badges/latest_release_date.svg)](https://anaconda.org/astro-sean/autophot) [![Anaconda-Server Badge](https://anaconda.org/astro-sean/autophot/badges/license.svg)](https://anaconda.org/astro-sean/autophot) [![Anaconda-Server Badge](https://anaconda.org/astro-sean/autophot/badges/downloads.svg)](https://anaconda.org/astro-sean/autophot ) [![Anaconda-Server Badge](https://anaconda.org/astro-sean/autophot/badges/installer/conda.svg)](https://conda.anaconda.org/astro-sean)
 
+</div>
 
 ## Description
 
@@ -94,76 +98,13 @@ will reduce images from ACAM with bias and flats located in calib/
 * If you want to add flats for ACAM images, keep same file notation i.e nflat_acam_[filter].fits
 * Will also crop ACAM images to focus of circular illuminated region - if 'INSTRUMNE' is ACAM.
  Cannot currently handle input of lists using call.py -f [filepath] method, will be included in future development. If you want to run multiple files in a single instance, move to a folder and run autophot -d in that directory or change fits_dir in input.yml and run autophot.
-## Output
-* Cosmic ray cleaned image with updated header - [ original filename ] + APT:
-	* Fwhm
-	* Zeropoint
-	* WCS values (if needed)
-* Template image from Panstarrs (if possible) - [ original filename ] + template
-	* Image from the [Panstarrs image cutout server](https://ps1images.stsci.edu/cgi-bin/ps1cutouts) in same filter as input image aligned astrometrically use wcs values.
-* Subtracted image (if possible) - [ original filename ] +  subtraction
-	Subtracted image used original image and template image using HOTPANTs.
-* Astrometric data - [ original filename ] +  APT astrometry:
-	* if wcs needed to be corrected/updated, The script will call astrometry.net and write a .txt file with astrometric outputs.
-* Target photometric data - target output.csv
-	* filepath
-	* telescope
-	* mjd
-	* zeropoint [ zp [] ]
-	* zeropoint error [ zp [] err ]
-	* limiting magnitude [ lmag ]
-	* instrumental magnitude of target [ [] inst ]
-	* calibrated magnitude of target [ [] ]
-	* calibrated magnitude of target err[ [] err ]
-	* Signal to noise of target [SNR]
-	* Photometric method used (ap/psf) [ method ]
-* if user selected:
-	* do all phot
-		* Photometric data on sources in field (all sources and calibration sources) with sigma level set by do all phot sigma saved to .cat file.
-	* save mag lim plot:
-		* Comparison between catalog magnitude and recovered magnitude for sources in field.
-	* save source plot:
-		* Image of sources used for zeropoint (circle) with their catalog position (cross) convert to pixel values using wcs values.
-	* save target plot:
-		* Image of target:
-			* if PSF used: shows source residuals after extraction.
-			* if AP used: shows image and annuli.
-	* save zp plot:
-		* Graph of zeropoints found from catalog sources with sigma clipping.
-  * get_template:
-    * get photometric template [currently only from panstarrs server]
-  * get_mag_lim:
-    * Perform limiting magnitude script on local area around target via atifical star injected [requires PSF model to have been built]
-  * phot_on_sub:
-    * Perform photometry on subtracted image [requries template image]
+
 ## Road map
-* Allow for user supplied template image
+
 * Currently only able to search for images using PanSTARRs server - will extend to use SDSS query.
 * Include [HEALPix](https://healpix.sourceforge.io/) to better optimize catalog selection, currently user defined.
 * Add logging module inside of changing stdout in python.
 
 ## Version History
-* 0.1
-    * Initial Release 21-04-19:
-* 0.2
-	* Re-release 13-06-19:
-		* New Features:
-			* initial parsers integration.
-			* Ability to download template images for pan starrs server.
-			* Return photometry of all sources in field default @ 25 sigma.
-* 0.3
-	* Release 23-07-19:
-		* New Features:
-			* Introduced HOTPANTS.
-			* ACAM reduction.
-			* if number of fits files is >500 user will be asked if they want to continue.
-			* added 2mass into catalog query.
-		* Bugs Fixed:
-			* Mitigated 'Tee object has no attribute issatty' error from reproject interp.
-			* fixed remove wcs.
-			* updated write yaml to not continue looking if filter keyword returns the word 'clear'.
-* 0.4
-  * Release 17-10-19:
-    * Introduced limiting magnitudes
-    * Introduced color terms
-    * Adjusted image aligning and subtraction
+* 0.0.1
+    Initial upload

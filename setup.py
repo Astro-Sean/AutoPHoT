@@ -10,10 +10,10 @@ setuptools.setup(
     long_description='Automated Pipelines for quick and accurate photometry of astronomical transient events',
     packages=setuptools.find_packages(),
     python_requires='>=3.5, <4',
-    conda_preserve_egg_dir=False,
-    package_data={'autophot': ['databases/catalog.yml'],
-                  'autophot': ['databases/default_input.yml'],
+    package_data={'autophot': ['databases/*.yml','example/example.fits']
                   },
+
+
     classifiers=[
 
         'Development Status :: 3 - Alpha',
@@ -25,9 +25,7 @@ setuptools.setup(
         # License
         'License :: CC BY-SA 4.0',
 
-
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
+        # Suitable Languages
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
