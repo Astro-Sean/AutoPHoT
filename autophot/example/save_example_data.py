@@ -2,7 +2,9 @@
 # -*- coding: utf-8 -*-
 
 '''
-load example data and save it to users desktop by default
+Load example data and save it
+to users desktop by default
+
 '''
 
 import os
@@ -24,3 +26,10 @@ def save_fits_to_desktop(home = os.path.join(str(Path.home()),'Desktop')):
     # copy example.fits to desktop
     copyfile(os.path.join(current_filpath,'example.fits'),
              os.path.join(example_directory_path,'example.fits'))
+
+
+    # Check that file is written to correct place
+    if os.path.isfile(os.path.join(example_directory_path,'example.fits')):
+        print('Succesful copy of %s written to:\n%s' % ('example.fits',os.path.join(example_directory_path,'example.fits')))
+
+    return os.path.join(example_directory_path,'example.fits')

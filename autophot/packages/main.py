@@ -2150,7 +2150,7 @@ def main(object_info,syntax,fpath):
 
 
                 target_output = pd.DataFrame(output,columns=output.keys(), index=[0])
-                target_output.to_csv(cur_dir + '/' +'out.csv',index=False)
+                target_output.round(6).to_csv(cur_dir + '/' +'out.csv',index=False)
 
                 for key,val in zp.items():
                         try:
