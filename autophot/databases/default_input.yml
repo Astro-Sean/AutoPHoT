@@ -32,6 +32,12 @@ AutoPhOT_input:
   # try to download template:
   get_template: False
 
+  # Force to use of psf fitting
+  force_psf: False
+
+  # skip lmag if target is bright enough 
+  skip_lmag: False
+
   # User template
   use_user_template: True
 

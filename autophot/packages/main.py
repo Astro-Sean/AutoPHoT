@@ -1928,17 +1928,16 @@ def main(object_info,syntax,fpath):
 
                 SNR_target = SNR(target,target_bkg,exp_time,0,syntax_iter['ap_size']* mean_fwhm,gain,0)
 
+                if not do_ap and not syntax_iter['do_ap_phot'] :
 
+                    if mag(target,0) - approx_psf_mag < 0.25:
+                        if not syntax['force_psf']:
 
-                # if not do_ap and not syntax_iter['do_ap_phot']:
-
-                    # if mag(target,0) - approx_psf_mag < 0.25:
-
-                    #     print('PSF not applicable')
-                    #     print('\n --- Approx tagret mag < Approx PSF mag --- ')
-                    #     print(str(round(float(mag(target,0)),3)) ,'<',str(round(float(approx_psf_mag),3)))
-                    #     do_ap = True
-                    #     ap_corr = ap_corr_base
+                            print('PSF not applicable')
+                            print('\n --- Approx tagret mag < Approx PSF mag --- ')
+                            print(str(round(float(mag(target,0)),3)) ,'<',str(round(float(approx_psf_mag),3)))
+                            do_ap = True
+                            ap_corr = ap_corr_base
 
                 if do_ap == True:
 
@@ -2034,8 +2033,7 @@ def main(object_info,syntax,fpath):
                     syntax_iter['image_radius'] = 1.3 * mean_fwhm
 
                 if syntax['get_lim_mag_test']:
-
-                    if SNR_target > 10 and abs(target_fwhm- mean_fwhm) < 1:
+                    if SNR_target > 10 and abs(target_fwhm - mean_fwhm) < 1 and syntax['skip_lmag']:
                             lmag = np.nan
                             output.update({'lmag':lmag})
 
@@ -2142,6 +2140,7 @@ def main(object_info,syntax,fpath):
                                                             mag_err[use_filter+'_err']) )
 
                 if lmag < mag_target[use_filter][0] and not np.isnan(lmag) or np.isnan(mag_target[use_filter][0]):
+                    if not syntax['skip_lmag']:
                         print('\n*** Image is magnitude limited ***')
 
 

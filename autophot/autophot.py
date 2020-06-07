@@ -16,9 +16,12 @@ print(r"""
 
  ---------------------------------------
          AutoPhOT Beta
-         S.J.Brennan et al. 2020
+         S.J.Brennan et al. 2020 in prep
          Please provide feedback/bugs to:
-         Email: sean.brennan2@ucdconnect.ie""")
+         Email: sean.brennan2@ucdconnect.ie
+---------------------------------------
+
+""")
 
 
 '''
