@@ -9,16 +9,19 @@ to allow user to update values for their work
 def load():
 
     import os
+    from functools import reduce
     from autophot.packages.call_yaml import yaml_syntax as cs
 
-    #  Get location of script
-    filepath ='/'.join(os.path.dirname(os.path.abspath(__file__)).split('/'))
+    #  Get location of this script
+    filepath = os.path.dirname(os.path.abspath(__file__))
 
     # Name of default input yaml file - do not change
-
     default_input = 'default_input.yml'
 
+    # filepath of default_input.yml
+    default_input_filepath = reduce(os.path.join,[filepath,'databases',default_input])
+
     #  Load default commands
-    default_syntax = cs(os.path.join(filepath+'/databases',default_input),'AutoPhOT_input').load_vars()
+    default_syntax = cs(default_input_filepath,'AutoPhOT_input').load_vars()
 
     return default_syntax
