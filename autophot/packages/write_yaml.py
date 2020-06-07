@@ -164,10 +164,15 @@ def teledata2yml(syntax,flst,filepath = None):
             while True:
                 scale_units = (input('Scale units [type skip to ignore]: ') or None)
 
-                scale_units = str(scale_units.replace("'",'').replace('"',''))
 
                 if scale_units =='skip':
                     break
+
+                if scale_units ==None:
+                    print('Error: no entry given')
+                    continue
+
+                scale_units = str(scale_units.replace("'",'').replace('"',''))
 
                 if scale_units not in accepted_scale_types:
                     print('Error: %s not in %s' % (scale_units,accepted_scale_types))
@@ -236,25 +241,25 @@ def teledata2yml(syntax,flst,filepath = None):
                     if fname.endswith(('.fits','.fit','.fts')):
 
                         headinfo = getheader(name)
-
                         # look for words with gain in it
-                        gain_keywords = [i.lower() for i in list(headinfo.keys()) if 'gain' in i]
+                        gain_keywords = [i for i in list(headinfo.keys()) if 'GAIN' in i]
 
                         # if specific gain keword not already entered, use gain as keyword in in header
-                        if 'gain' not in existing_var[j]:
+                        if 'GAIN' not in existing_var[j]:
                             print('Similar gain keywords found:',gain_keywords)
                             while True:
+
                                 gain_key = (input('Key matching instrument gain [type skip to ignore]: ') or None)
 
                                 if gain_key == None:
                                     print('Error: no entry made')
                                 elif gain_key == 'skip ':
-                                    gain_key = 'gain'
+                                    gain_key = 'GAIN'
                                 else:
                                     break
 
                             #  add gain keyword and value for gain
-                            tele_entry[str(j)].update({'gain':gain_key})
+                            tele_entry[str(j)].update({'GAIN':gain_key})
 
 
 
