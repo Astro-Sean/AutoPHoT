@@ -9,7 +9,7 @@
 
 </div>
 
-## Description
+## Introduction
 
 A core part of my PhD is the development and publishing of AutoPHoT, an
 automated photometry pipeline that is optimized for the measurements of
@@ -69,41 +69,19 @@ to every .c file.
 Once installed, locate the hotpants executable and update 'hotpants exe loc' in input.yml.
 Future work will include pip install/upgrade installation method.
 ## Usage
-* Main execution is from call.py
-* Main settings are set in input.yml file
-* To use file directory set out via 'fits dir' in input.yml:
-```python
-python call.py
-```
-* Will create separate folder title [directory name] output in parent directory.
-* For single file:
-```python
-python call.py -f [filepath]
-```
-* Will save output in folder with name that of the fits file in same directory as fits file
-* To use current directory:
-```python
-python call.py -d
-```
-* Will create separate folder title [directory name] output in parent directory.
-*  to hide print statements
-```python
-python call.py -v
-```
-* Currently setup to reduce ACAM images from the WHT:
-```python
-python call.py -r
-```
-will reduce images from ACAM with bias and flats located in calib/
-* If you want to add flats for ACAM images, keep same file notation i.e nflat_acam_[filter].fits
-* Will also crop ACAM images to focus of circular illuminated region - if 'INSTRUMNE' is ACAM.
- Cannot currently handle input of lists using call.py -f [filepath] method, will be included in future development. If you want to run multiple files in a single instance, move to a folder and run autophot -d in that directory or change fits_dir in input.yml and run autophot.
+
+For quick use see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb)
+
+for more detailed explanation see here (work in progress)
 
 ## Road map
 
-* Currently only able to search for images using PanSTARRs server - will extend to use SDSS query.
-* Include [HEALPix](https://healpix.sourceforge.io/) to better optimize catalog selection, currently user defined.
-* Add logging module inside of changing stdout in python.
+* update
+
+## Flowcahrt
+<p align="center">
+  <img src=https://github.com/Astro-Sean/autophot/blob/master/flowchart.png>
+</p>
 
 ## Version History
 * 0.0.1
