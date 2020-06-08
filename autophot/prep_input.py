@@ -12,11 +12,17 @@ def load():
     from functools import reduce
     from autophot.packages.call_yaml import yaml_syntax as cs
 
-    #  Get location of this script
+    # Get location of this script
     filepath = os.path.dirname(os.path.abspath(__file__))
 
     # Name of default input yaml file - do not change
     default_input = 'default_input.yml'
+
+    '''
+    reduce package from functools
+    - apply function of two arguments cumulatively to the items of
+    iterable, from left to right, so as to reduce the iterable to a single value.
+    '''
 
     # filepath of default_input.yml
     default_input_filepath = reduce(os.path.join,[filepath,'databases',default_input])

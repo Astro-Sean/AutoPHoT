@@ -2,12 +2,6 @@
 # -*- coding: utf-8 -*-
 
 
-
-
-# AutoPHoT Specific packages
-from __future__ import absolute_import
-
-
 print(r"""
     _       _       ___ _  _    _____
    /_\ _  _| |_ ___| _ \ || |__|_   _|
@@ -24,16 +18,6 @@ print(r"""
 """)
 
 
-'''
-Enter something here
-
-'''
-
-
-from autophot.packages.recover_output import recover
-from autophot.packages.run import run_autophot
-
-
 # Check user is running Python3 if not exit
 import sys
 if sys.version_info<(3,0,0):
@@ -42,6 +26,10 @@ if sys.version_info<(3,0,0):
   sys.stderr.write("Your Version: %s\n" % python_version())
   exit(1)
 
+# AutoPHoT Specific packages
+from autophot.packages.recover_output import recover
+from autophot.packages.run import run_autophot
+
 # Standard packages
 import time
 from urllib.request import urlopen
@@ -49,9 +37,6 @@ import matplotlib
 matplotlib.use('Agg') # Does not display figures to users
 
 
-# =============================================================================
-# Internet required to catalog download, template download
-# =============================================================================
 
 def internet_on():
     print('Checking internet connection...')
@@ -64,27 +49,22 @@ def internet_on():
 if not internet_on():
     print('Not connected to internet - some packages may not work')
 else:
-
     print('Connected to internet')
-
-# =============================================================================
-# Run autophot
-# =============================================================================
 
 
 
 def run(syntax):
 
-
+    #  Run AutoPhOT with instructurions given by syntax dictionary
     start = time.time()
 
-    print('> Using directory from input.yml:',syntax['fits_dir'] )
+    print('> Using directory from input.yml: %s'  % syntax['fits_dir'] )
 
     '''
     Run complete autophot package for complete photometric reduction
     '''
-
     run_autophot(syntax)
+
 
     ''' Go through output filepath and see what has already
     been done and produce a human readbale output
