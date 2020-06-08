@@ -21,8 +21,15 @@ email: sean.brennan2@ucdconnect.ie [subject: github autophot]**
 
  * Colour terms still in testing/development
  * Currently astrometry.net, HOTPANTS and astoalign needs to be installed by USER.
+ * PSF selection will look for bright isolated sources, however this can lead to sources being selected near the image boundaries. Future update with annulus selection procedure 
 
 ## Installation
+
+
+* Some packages require conda-forge in channel list so run below beforehand:
+```python
+conda config --add channels conda-forge.
+```
 
 * Install via conda:
 
@@ -31,10 +38,13 @@ conda install -c astro-sean autophot
 ```
 
 * Code relies on [Astrometry.net](https://arxiv.org/abs/0910.2233) by Dustin Lang to solve for world coordinates system (WCS). Code can be downloaded/installed [here](http://astrometry.net/doc/readme.html) and [here](http://astrometry.net/doc/build.html#build.)
-Once installed, locate the solve-field executable [default location: /usr/local/astrometry/bin/solve-field] and update (if needed) 'solve field exe loc' in syntax (see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb)).
+Once installed, locate the solve-field executable [default location: /usr/local/astrometry/bin/solve-field] and update (if needed) 'solve_field_exe_loc' in syntax (see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb)).
 
-* Image subtraction uses [HOTPANTS](http://www.ascl.net/1504.004) by Andy Becker - HOTPANTS can be found [here](https://github.com/acbecker/)
-Known error with installation if installing on MacOS - if upon installation you get 'malloc.h' file not found, replace
+* Image subtraction uses [HOTPANTS](http://www.ascl.net/1504.004) by Andy Becker - HOTPANTS can be found [here](https://github.com/acbecker/). Once installed, locate the hotpants executable and update 'hotpants_exe_loc' in syntax see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb).
+
+**Known error with installation of HOTPANTS**
+
+if installing on MacOS - if upon installation you get 'malloc.h' file not found, replace
 
 ```c
 #include <malloc.h>
@@ -49,13 +59,17 @@ with
  #endif
 ```
 to every .c file.
-Once installed, locate the hotpants executable and update 'hotpants exe loc' in syntax see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb).
+
 
 ## Usage
 
-For quick use see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb)
+* For quick use see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb)
 
-for more detailed explanation see here (work in progress)
+* For more detailed explanation see here (work in progress)
+
+## Referencing
+
+* update
 
 ## Road map
 
