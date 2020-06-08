@@ -30,4 +30,6 @@ def load():
     #  Load default commands
     default_syntax = cs(default_input_filepath,'AutoPhOT_input').load_vars()
 
+    print('Default input loaded in from: \n%s' % default_input_filepath )
+
     return default_syntax
