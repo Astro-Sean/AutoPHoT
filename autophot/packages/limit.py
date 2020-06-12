@@ -103,7 +103,6 @@ def limiting_magnitude_prob(syntax,image,model =None,r_table=None):
         import matplotlib.pyplot as plt
         import numpy as np
         import matplotlib.gridspec as gridspec
-        import os,sys
         import random
         from astropy.stats import SigmaClip
         from photutils import Background2D, MedianBackground
@@ -112,13 +111,17 @@ def limiting_magnitude_prob(syntax,image,model =None,r_table=None):
 
         from autophot.packages.functions import r_dist
 
+        import logging
+
+        logger = logging.getLogger(__name__)
+
         # level for detection - Rule of thumb ~ 5 is a good detection level
         level = syntax['lim_SNR']
 
         # Lower_level
         low_level = 3
 
-        print('Limiting threshold: %s sigma' % level)
+        logger.info('Limiting threshold: %d sigma' % level)
 
         if syntax['psf_bkg_surface']:
 
@@ -169,7 +172,7 @@ def limiting_magnitude_prob(syntax,image,model =None,r_table=None):
         mask_ap  = CircularAperture([image.shape[0]/2,image.shape[1]/2],r = source_size)
 
         mask = mask_ap.to_mask(method='center')
-        print('Number of pixels in star',int(np.sum(mask.to_image(image.shape))))
+        logging.info('Number of pixels in star: %d' % np.sum(mask.to_image(image.shape)))
 
         # Mask out center region
         mask_image  = (image_no_surface ) * (1-mask.to_image(image.shape))
@@ -225,8 +228,8 @@ def limiting_magnitude_prob(syntax,image,model =None,r_table=None):
         mean = popt[1]
         std  = abs(popt[2])
 
-        print('Mean: %s - std: %s' % (round(mean,3),round(std,3)))
-        print('Detection at %s std: %s' % (level,round(mean + level*std,3)))
+        logging.info('Mean: %s - std: %s' % (round(mean,3),round(std,3)))
+        logging.info('Detection at %s std: %s' % (level,round(mean + level*std,3)))
 
         limiting_mag_figure = plt.figure(figsize = set_size(540,aspect = 1))
         gs = gridspec.GridSpec(2, 2)
@@ -268,8 +271,8 @@ def limiting_magnitude_prob(syntax,image,model =None,r_table=None):
         ax2.set_title('Image - Surface')
 
 
-        x = random.sample(range(10,int(image.shape[0])), 10)
-        y = random.sample(range(10,int(image.shape[1])), 10)
+        x = random.sample(range(0,int(image.shape[0])), int(image.shape[0])//3)
+        y = random.sample(range(0,int(image.shape[1])), int(image.shape[0])//3)
 
         counts = abs(mean + level*std)
 
@@ -284,7 +287,7 @@ def limiting_magnitude_prob(syntax,image,model =None,r_table=None):
 
         low_flux  = counts / syntax['exp_time']
 
-        low_mag_level = -2.5*np.log10(flux)
+        low_mag_level = -2.5*np.log10(low_flux)
 
         try:
 
@@ -301,7 +304,7 @@ def limiting_magnitude_prob(syntax,image,model =None,r_table=None):
             ax1.scatter(x[0],y[0],marker = 'o',s=150, facecolors='none', edgecolors='r',alpha = 0.5)
 
         except:
-            print('PSF model not available - Using Gaussian')
+            logging.info('PSF model not available - Using Gaussian')
             model_label = 'Gaussian'
             x_grid = np.arange(0,image.shape[0])
             xx,yy= np.meshgrid(x_grid,x_grid)
@@ -328,10 +331,7 @@ def limiting_magnitude_prob(syntax,image,model =None,r_table=None):
             ax1.set_title('Fake Sources [%s]' % model_label)
 
         except Exception as e:
-            exc_type, exc_obj, exc_tb = sys.exc_info()
-            fname1 = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            print(exc_type, fname1, exc_tb.tb_lineno,e)
-
+            logging.exception(e)
             im1=ax1.imshow(image - surface , origin='lower')
             ax1.set_title('[ERROR] Fake Sources [%s]' % model_label)
 
@@ -346,8 +346,7 @@ def limiting_magnitude_prob(syntax,image,model =None,r_table=None):
         plt.close(limiting_mag_figure)
 
     except Exception as e:
-        exc_type, exc_obj, exc_tb = sys.exc_info()
-        fname1 = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-        print(exc_type, fname1, exc_tb.tb_lineno,e)
+        logging.exception(e)
+
 
     return mag_level,low_mag_level

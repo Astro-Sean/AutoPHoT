@@ -1,44 +1,42 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Oct 12 09:16:57 2018
 
-@author: seanbrennan
-"""
 
 '''
-
 Integration between standard fits file/format and output of Dustin Langs
 Astrometry.Net algorithim
 '''
- 
- 
-'''
-- removewcs:
-    
+
+
+def removewcs(parent_fits, delete_keys = False):
+
+    '''
+    - removewcs:
+
     rename pre-existing keywords from header hdu given in keywords list.
-    
+
     parameters:
         - a: header information given via fits.open
         - delete_keys: delete this keywords and thier values rather than renaming
-    
-    retruns:
-        - a: new header hdu with/without new keywords 
-        
-'''
 
-def removewcs(a, delete_keys = False):
-    
-    print('> Removing WCS Values <')
-    
+    retruns:
+        - a: new header hdu with/without new keywords
+
+    '''
+
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info('Removing any pre-existing WCS keys ')
+
     try:
-        if a['UPWCS']:
+        if parent_fits['UPWCS']:
             print('Removed UPWCS key')
-            del a['UPWCS']
-                  
+            del parent_fits['UPWCS']
+
     except:
         pass
-   
+
     keywords = ['CD1_1','CD1_2',
                 'CD2_1','CD2_2',
                 'CRVAL1','CRVAL2',
@@ -72,51 +70,50 @@ def removewcs(a, delete_keys = False):
                 'LTV1','LTV2',
                 'LTM1_1','LTM2_2'
                            ]
-        
+
     for i in keywords:
-        if i.replace(i[0],'_') in a:
-            del a[i.replace(i[0],'_')]
+
+        if i.replace(i[0],'_') in parent_fits:
+            del parent_fits[i.replace(i[0],'_')]
         try:
             if delete_keys == True:
                 try:
-                    del a[i]
+                    del parent_fits[i]
                 except:
                     continue
             else:
-                a.rename_keyword(i,i.replace(i[0],'_'))
+                parent_fits.rename_keyword(i,i.replace(i[0],'_'))
                 continue
+
         except Exception as e:
-            print(e)
+            logger.exception(e)
             pass
 
-    
-    return a
 
-'''
+    return parent_fits
 
-- updatewcs(a,b):
-    
+
+
+def updatewcs(parent_fits,wcs_fits):
+
+    '''
+
+    - updatewcs(a,b):
+
     Update header fits file 'a' with the header information with header fits file 'b'
-    
+
     paramters:
-        - a: header information given via fits.open
-        - b: header information  from astrometry.net query
-        
+    - a: header information given via fits.open
+    - b: header information  from astrometry.net query
+
     retruns:
-        - a: header hdu with update keywords
-'''    
+    - a: header hdu with update keywords
+    '''
 
-def updatewcs(a,b):
-#    
-#    parent_fits = a[0].header
-#        
-#    wcs_fits = b[0].header
-    
-    parent_fits = a
-        
-    wcs_fits = b
-    
+    import logging
 
+    logger = logging.getLogger(__name__)
+    logger.info('Updating WCS keys')
 
     keywords = ['CD1_1','CD1_2',
                 'CD2_1','CD2_2',
@@ -137,17 +134,12 @@ def updatewcs(a,b):
                 'RADECSYS','WCSDIM','WAT0_001','WAT1_001','WAT2_001',
                 'PV1_1','PV1_2','PV2_1','PV2_2','PROJP1','PROJP3'
                 ]
-            
-        
 
-    
     for i in keywords:
-        
         try:
             parent_fits[i] = ((wcs_fits[i]),'Updated WCS by APT')
         except:
-            
-            pass
-           
-            pass
+            continue
+
     return parent_fits
+

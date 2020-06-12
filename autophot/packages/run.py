@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -12,7 +13,7 @@ def run_autophot(syntax):
     from autophot.packages.functions import getheader
     from autophot.packages.check_tns import TNS_query
     from autophot.packages.call_yaml import yaml_syntax as cs
-    from autophot.packages.write_yaml import teledata2yml
+    from autophot.packages.call_datacheck import checkteledata
     from autophot.packages.main import main
 
 
@@ -24,7 +25,7 @@ def run_autophot(syntax):
     import inspect
     import re
     import numpy as np
-
+    from functools import reduce
 
 
     flist_new = []
@@ -124,8 +125,7 @@ def run_autophot(syntax):
 #     Go through files, check if I have their details
 # =============================================================================
 
-    syntax = teledata2yml(syntax,flist)
-
+    syntax = checkteledata(syntax,flist)
 
 # =============================================================================
 # Import catalog specific naming conventions installed during autophot installation
@@ -138,6 +138,7 @@ def run_autophot(syntax):
     catalog_syntax = cs(os.path.join(filepath+'/databases',catalog_syntax_yml),syntax['catalog']).load_vars()
 
     if syntax['catalog'] == 'custom':
+
        currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
        dir_name = currentdir+'/'+'catalog_queries'
        catalog_dir = syntax['catalog']
@@ -155,14 +156,12 @@ def run_autophot(syntax):
     else:
         available_filters = [i for i,_ in catalog_syntax.items()]
 
-
-
 # =============================================================================
-# load specific telescope data - Useer shoud include this in setup
+# load telescope data - User shoud include this in setup
 # =============================================================================
 
     tele_syntax_yml = 'telescope.yml'
-    tele_syntax = cs(os.path.join(syntax['wdir'],tele_syntax_yml) ).load_vars()
+    tele_syntax = cs(os.path.join(syntax['wdir'],tele_syntax_yml)).load_vars()
 
 # =============================================================================
 # Checking for target information
@@ -179,20 +178,27 @@ def run_autophot(syntax):
     Will query Transient Name Server Server for target information
     '''
 
+    pathlib.Path(os.path.join(syntax['wdir'],'tns_objects')).mkdir(parents = True, exist_ok=True)
+
     if syntax['target_name'] != None:
 
-        if os.path.isfile(syntax['wdir'] + 'tns_objects'+'/'+(target_name)+'.yml'):
+        transient_path = reduce(os.path.join,[syntax['wdir'],'tns_objects',(target_name)+'.yml'])
 
-            TNS_response = cs(syntax['wdir'] + 'tns_objects'+'/'+target_name+'.yml',target_name).load_vars()
+        if os.path.isfile(transient_path):
+
+            TNS_response = cs(transient_path,target_name).load_vars()
         else:
             try:
                 print('\n> Checking TNS for %s information <' % syntax['target_name'])
 
+                # Run request to TNS
                 TNS_obj = TNS_query(target_name)
 
+                # Retreive the data
                 TNS_response = TNS_obj.get_coords()
 
-                cs.create_yaml(syntax['wdir'] + 'tns_objects'+'/'+(target_name)+'.yml',TNS_response)
+                # create a yaml file with object information
+                cs.create_yaml(transient_path,TNS_response)
 
             except Exception as e:
                 exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -205,7 +211,7 @@ def run_autophot(syntax):
 
 
 # =============================================================================
-# Checking that selected catalog has appropiate fioters - if not remove
+# Checking that selected catalog has appropiate filters - if not remove
 # =============================================================================
 
     print('\n> Checking: Filters')
@@ -220,38 +226,43 @@ def run_autophot(syntax):
             headinfo = getheader(name)
 
             try:
-                inst = str(headinfo['TELESCOP'])
+                tele = str(headinfo['TELESCOP'])
+                inst_key = 'INSTRUME'
+                inst = str(headinfo[inst_key])
+
 
             except:
                 if syntax['ignore_no_telescop']:
-                    inst = 'UNKNOWN'
+                    tele = 'UNKNOWN'
                     print('Telescope name not given - setting to UNKNOWN')
                 else:
-                    print('Available TELESCOP:' + '\n'+str(list(tele_syntax))+ '\n')
-                    inst = input('-> TELESCOP NOT FOUND; Enter telescope name: ')
+                    print('Available TELESCOP:\n%s' % tele_syntax.keys())
+                    tele = input('TELESCOP NOT FOUND; Enter telescope name: ')
 
-            if inst.strip() == '':
-                inst = 'UNKNOWN'
-                headinfo['TELESCOP'] = inst
+            if tele.strip() == '':
+                tele = 'UNKNOWN'
+                headinfo['TELESCOP'] = tele
 
             pass
 
             # Default filter key name
             filter_header = 'filter_key_0'
+
             '''
             Go through filter keywords filter_key_[1..2..3..etc] looking for one that works
             '''
+
             while True:
 
-                if tele_syntax[inst][filter_header] not in list(headinfo.keys()):
+                if tele_syntax[tele][inst_key][inst][filter_header] not in list(headinfo.keys()):
                     old_n = int(re.findall(r"[-+]?\d*\.\d+|\d+", filter_header)[0])
                     filter_header = filter_header.replace(str(old_n),str(old_n+1))
-                elif tele_syntax[inst][filter_header].lower() == 'clear':
+                elif tele_syntax[tele][inst_key][inst][filter_header].lower() == 'clear':
                     continue
                 else:
                     break
             try:
-                fits_filter = headinfo[tele_syntax[inst][filter_header]]
+                fits_filter = headinfo[tele_syntax[tele][inst_key][inst][filter_header]]
             except:
                 fits_filter = 'no_filter'
 
@@ -260,27 +271,29 @@ def run_autophot(syntax):
                 fits_filter = syntax['force_filter']
 
             try:
-                filter_name = tele_syntax[inst][str(fits_filter)]
+                filter_name = tele_syntax[tele][inst_key][inst][str(fits_filter)]
+
             except:
                 filter_name = str(fits_filter)
             try:
                 if headinfo['IMAGETYP'].lower() in ['bias','zero','flat']:
                     wrong_file_removed+=1
                     files_removed+=1
-                    # print('\n* Removed file: %s -> invalid images[%s] *\n' % (str(fname),str(headinfo['IMAGETYP'].lower())))
+
                     continue
             except:
                 pass
 
             if not filter_name in available_filters:
+
                 files_removed+=1
                 filter_removed+=1
-                # print('\n* Removed file: %s: Filter not in catalog *\n' % str(fname))
+
                 continue
 
             if syntax['select_filter']:
                 try:
-                    if str(tele_syntax[inst][str(fits_filter)]) not in syntax['do_filter']:
+                    if str(tele_syntax[tele][inst_key][inst][str(fits_filter)]) not in syntax['do_filter']:
                         files_removed+=1
                         filter_removed+=1
                         # print('\n* Removed file: %s: Filter not selected *\n' % str(fname))
@@ -307,9 +320,9 @@ def run_autophot(syntax):
     print('\nFiles removed - Total: %s\n' % files_removed)
 
     if len(flist) > 500:
-            ans = str(input('> More than 500 .fits files [%s] -  do you want to continue? [y]: ' % len(flist)) or 'y')
-            if  ans != 'y':
-                raise Exception('Exited AutoPHoT - file number size issue')
+        ans = str(input('> More than 500 .fits files [%s] -  do you want to continue? [y]: ' % len(flist)) or 'y')
+        if  ans != 'y':
+            raise Exception('Exited AutoPHoT - file number size issue')
 
 # =============================================================================
 # Single processing chain

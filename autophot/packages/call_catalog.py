@@ -39,15 +39,18 @@ def search(image, headinfo, target_coords, syntax, catalog_syntax, filter_):
     """
 
     import warnings
+
     if not syntax['catalog_warnings'] or syntax['master_warnings']:
             warnings.filterwarnings("ignore")
 
     import numpy as np
-    import os,sys,inspect
+    import os,sys
     import requests
     import pathlib
     import shutil
     import os.path
+    import logging
+    from functools import reduce
 
     from astropy.table import Table
     from astropy.wcs import wcs
@@ -55,23 +58,23 @@ def search(image, headinfo, target_coords, syntax, catalog_syntax, filter_):
     from astropy.io.votable import parse_single_table
     from astropy.coordinates import Angle
 
+    from autophot.packages.functions import r_dist
+    logger = logging.getLogger(__name__)
+
     try:
 
         # Get wxs information
         w1 = wcs.WCS(headinfo)
 
-        # Radius arounbd target
+        # Radius around target
         radius  = float(syntax['radius'])
 
-        # Target name, if applicabel
+        # Target name, if applicable
         target = syntax['target_name']
 
-        # Get current directory location,, create directory if needed
-        currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-        dir_name = currentdir+'/'+'catalog_queries'
-        pathlib.Path(dir_name).mkdir(parents = True, exist_ok=True)
-
-
+        # Get workdirectory location,, create directory if needed
+        dirname = os.path.join(syntax['wdir'],'catalog_queries')
+        pathlib.Path(dirname).mkdir(parents = True, exist_ok=True)
 
         '''
         Getting target Ra and Dec
@@ -81,46 +84,45 @@ def search(image, headinfo, target_coords, syntax, catalog_syntax, filter_):
         - if ra and dec not given us center of image as location - for quick reduction of image
 
         '''
-
+        # if target or it's ra/dec - set target name
         if target == None:
-             if syntax['target_ra'] != None:
+             if syntax['target_ra'] != None and syntax['target_dec'] != None:
                  target = 'target_ra_'+str(round(syntax['target_ra']))+'_dec_'+str(round(syntax['target_dec']))
-                 print('New target name: %s' %target)
+                 logger.info('New target name: %s' %target)
              else:
+                 #  if not just call target
                  target = 'target'
 
-
-        # Search limitation with Pan Starrs rlimited to 0.5deg
+        # Search limitation with Pan Starrs rlimited to 0.5 deg
         if radius > 0.5 and syntax['catalog'] == 'pan_starrs' :
-                    print('WARNING: Search Limitation with PanStarrs API -> Radius = 0.5 [deg] ')
+                    logger.warning('Search Limitation with PanStarrs API -> Radius = 0.5 [deg] ')
                     radius = 0.5
 
-        # Choosen catalog for input.yml, create directory if needed
+        # Choosen catalog for input.yml, create directory for catalog if needed
         catalog_dir = syntax['catalog']
-        pathlib.Path(dir_name + '/' + catalog_dir).mkdir(parents = True, exist_ok=True)
+        pathlib.Path(os.path.join(dirname ,catalog_dir)).mkdir(parents = True, exist_ok=True)
 
         # Folder for target, create directory if needed
-        target_dir =  dir_name + '/' + catalog_dir+'/'+target.lower()
+        target_dir =   reduce(os.path.join,[dirname,catalog_dir,target.lower()])
         pathlib.Path(target_dir).mkdir(parents = True, exist_ok=True)
 
         # Filename of fetchec catalog
-        fname = str(target) + '_RAD_' + str(radius)
+        fname = str(target) + '_r_' + str(radius)
 
         # Can force to use certain catalog - untested 03-10-19
         if syntax['force_catalog_csv']:
-            print('Using '+syntax['force_catalog_csv_name']+' as catalog')
-            fname = str(syntax['force_catalog_csv_name']) + '_RAD_' + str(radius)
+            logger.info('Using '+syntax['force_catalog_csv_name']+' as catalog')
+            fname = str(syntax['force_catalog_csv_name']) + '_r_' + str(radius)
 
         # if catalog is found via it's filename - use this and return data
-        if os.path.isfile(target_dir +'/'+ fname+'.csv'):
-            print('Catalog found for Target: %s\nCatalog: %s \nFile: %s' % (target,str(catalog_dir).upper(),fname))
-
-            data = Table.read(target_dir+'/'+ fname+'.csv',format = 'csv')
+        if os.path.isfile(os.path.join(target_dir,fname+'.csv')):
+            logger.info('Catalog found for Target: %s\nCatalog: %s \nFile: %s' % (target,str(catalog_dir).upper(),fname))
+            data = Table.read(os.path.join(target_dir,fname+'.csv'),format = 'csv')
             data = data.to_pandas()
 
         else:
-            # If no previously catalog found
-            print('Searching for new catalog: %s ' % syntax['catalog'])
+            # If no previously catalog found - look for one
+            logger.info('Searching for new catalog: %s ' % syntax['catalog'])
 
             if syntax['catalog'] in ['gaia']:
 
@@ -136,7 +138,7 @@ def search(image, headinfo, target_coords, syntax, catalog_syntax, filter_):
 
                 data = data.to_pandas()
                 data.to_csv(fname+'.csv', sep=',',index = False)
-                print(len(data))
+
                 # Move file to new location - 'catalog queries'
                 shutil.move(os.path.join(os.getcwd(), fname+'.csv'),
                             os.path.join(target_dir, fname+'.csv'))
@@ -144,7 +146,6 @@ def search(image, headinfo, target_coords, syntax, catalog_syntax, filter_):
                 warnings.filterwarnings('default')
 
             if syntax['catalog'] in ['apass','2mass']:
-                print('Downloading from %s'  % syntax['catalog'] )
 
                 # No row limit
                 Vizier.ROW_LIMIT = -1
@@ -169,7 +170,6 @@ def search(image, headinfo, target_coords, syntax, catalog_syntax, filter_):
 
                 if syntax['catalog'] == 'pan_starrs':
 
-
                     server=('https://archive.stsci.edu/'+'panstarrs/search.php')
                     params = {'RA': target_coords.ra.degree, 'DEC': target_coords.dec.degree,
                               'SR': radius, 'max_records': 10000,
@@ -185,7 +185,7 @@ def search(image, headinfo, target_coords, syntax, catalog_syntax, filter_):
 
                 with open('temp.xml', "wb") as f:
 
-                    print('Downloading from %s'  % syntax['catalog'] )
+                    logger.info('Downloading from %s'  % syntax['catalog'] )
                     response = requests.get(server,params = params)
                     f.write(response.content)
 
@@ -205,13 +205,14 @@ def search(image, headinfo, target_coords, syntax, catalog_syntax, filter_):
 
                 # No sources in field - temporary fix - will add "check different catalog"
                 if len(data) == 0:
-                    sys.exit('WARNING: %s No Coverage - Select new catalog' %  syntax['catalog'])
+                    logging.critical('Catalog: %s : does not cover field' %  syntax['catalog'])
+                    sys.exit()
 
                 # Save to csv and move to 'catalog_queries'
                 data.to_csv(fname+'.csv',index = False)
 
                 shutil.move(os.path.join(os.getcwd(), fname+'.csv'),
-                            os.path.join(target_dir, fname+'.csv'))
+                            os.path.join(target_dir,  fname+'.csv'))
 
 
         # Add in x and y pixel locatins under wcs
@@ -226,15 +227,13 @@ def search(image, headinfo, target_coords, syntax, catalog_syntax, filter_):
         data = data[data.y_pix < image.shape[0] - syntax['pix_bound']]
         data = data[data.y_pix > syntax['pix_bound']]
 
-        print('Data length: %.f' % len(data))
+        logger.info('Catalog length: %d' % len(data))
 
         warnings.filterwarnings("default")
 
     except Exception as e:
-         exc_type, exc_obj, exc_tb = sys.exc_info()
-         fname1 = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-         print(exc_type, fname1, exc_tb.tb_lineno,e)
-         data = None
+        logger.exception(e)
+        data = None
 
     return data
 
@@ -280,11 +279,16 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
 
     from autophot.packages.functions import r_dist,gauss_2d
 
+    import logging
+
+    logger = logging.getLogger(__name__)
+
     x_new_source = []
     y_new_source = []
     x_new_cen    = []
     y_new_cen    = []
     cp_dist      = []
+    dist2target_list = []
     cat_idx      = []
     non_detections = []
     detections     = []
@@ -314,12 +318,16 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
     useable_sources = 0
 
     try:
-        print('\n --- Matching sources to catalog --- ')
+        logger.debug('Matching sources to catalog')
 
-        for idx in data_update.index:
+        for i in range(len(data_update.index.values)):
+
+            idx = np.array(data_update.index.values)[i]
+
+            print('\rMatching catalog source to image: %d / %d' % (float(i),len(data_update.index)), end = '',flush=False)
+
             if useable_sources >= syntax['max_catalog_sources']:
                 break
-
 
             try:
 
@@ -328,6 +336,7 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
                      x_new_cen.append(np.nan)
                      y_new_cen.append(np.nan)
                      cp_dist.append(np.nan)
+                     dist2target_list.append(np.nan)
                      continue
 
                  # catalog pixel coordinates of source take as an approximate location
@@ -351,6 +360,7 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
                      x_new_cen.append(np.nan)
                      y_new_cen.append(np.nan)
                      cp_dist.append(np.nan)
+                     dist2target_list.append(np.nan)
                      fwhm_list.append(np.nan)
 
                      continue
@@ -360,6 +370,7 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
                      x_new_cen.append(np.nan)
                      y_new_cen.append(np.nan)
                      cp_dist.append(np.nan)
+                     dist2target_list.append(np.nan)
                      fwhm_list.append(np.nan)
 
                      continue
@@ -389,6 +400,7 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
                      x_new_cen.append(np.nan)
                      y_new_cen.append(np.nan)
                      cp_dist.append(np.nan)
+                     dist2target_list.append(np.nan)
                      fwhm_list.append(np.nan)
 
                      continue
@@ -411,6 +423,7 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
                          x_new_cen.append(xc_guess)
                          y_new_cen.append(yc_guess)
                          cp_dist.append(np.nan)
+                         dist2target_list.append(np.nan)
                          fwhm_list.append(np.nan)
                          continue
 
@@ -447,23 +460,26 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
                      x_new_cen.append(np.nan)
                      y_new_cen.append(np.nan)
                      cp_dist.append(np.nan)
+                     dist2target_list.append(np.nan)
                      fwhm_list.append(np.nan)
 
-
-                     exc_type, exc_obj, exc_tb = sys.exc_info()
-                     fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                     print(exc_type, fname, exc_tb.tb_lineno,e)
+                     logger.exception(e)
 
                      continue
 
                  k+=1
 
                  # Add new source location accounting for difference in fitted location / expected location
-                 x_new_cen.append(xcen -   syntax['scale'] + x)
-                 y_new_cen.append(ycen -   syntax['scale'] + y)
+
+                 centroid_x = xcen -   syntax['scale'] + x
+                 centroid_y = ycen -   syntax['scale'] + y
+                 x_new_cen.append(centroid_x)
+                 y_new_cen.append(centroid_y)
+
+                 dist2target = r_dist(syntax['target_x_pix'],centroid_x,syntax['target_y_pix'],centroid_y)
 
                  cp_dist.append(np.sqrt( (xcen - syntax['scale'])**2 + (ycen - syntax['scale'])**2) )
-
+                 dist2target_list.append(dist2target)
                  detections.append(data_update[catalog_syntax[filter_]].loc[[idx]].values[0])
 
                  fwhm_list.append(sigma * 2*np.sqrt(2*np.log(2)))
@@ -497,13 +513,12 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
 
             except Exception as e:
 
-                exc_type, exc_obj, exc_tb = sys.exc_info()
-                fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                print(exc_type, fname, exc_tb.tb_lineno,e)
+                logger.exception(e)
 
                 x_new_cen.append(xc_guess)
                 y_new_cen.append(yc_guess)
                 cp_dist.append(np.nan)
+                dist2target.append(np.nan)
                 fwhm_list.append(np.nan)
 
                 continue
@@ -515,7 +530,7 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
 
 
             if len(non_detections) == 0:
-                print('All sources detected')
+                logger.debug('All sources detected')
 
             fig = plt.figure(figsize=(6,8))
             ax = fig.add_subplot(111)
@@ -531,6 +546,7 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
                          color = 'red',
                          histtype = 'step',
                          label = 'Detection')
+
             ax.set_title('Non - Detections')
             ax.set_xlabel('Magnitude')
             ax.set_ylabel('Binned Occurance')
@@ -548,6 +564,7 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
                       np.array(x_new_cen),
                       np.array(y_new_cen),
                       np.array(cp_dist),
+                      np.array(dist2target_list),
                       np.array(fwhm_list)
                       ]
 
@@ -561,33 +578,14 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
                       'x_pix',
                       'y_pix',
                       'cp_dist',
+                      'dist2target',
                       'fwhm'
                       ]
-        # filters = ['J','H','K','U', 'u','v', 'B', 'g', 'V', 'r', 'R', 'i', 'I', 'z']
 
         data_new_frame = pd.DataFrame(frame_data).T
         data_new_frame.columns = frame_cols
         data_new_frame.set_index('cat_idx',inplace = True)
 
-#         for col in filters:
-#             try:
-#                 if catalog_syntax[col] in data_update.columns:
-#                     data_new_frame[col]        = data_update[catalog_syntax[col]]
-#                     data_new_frame[col+'_err'] = data_update[catalog_syntax[col+'_err']]
-
-
-
-#             except:
-
-# #                exc_type, exc_obj, exc_tb = sys.exc_info()
-# #                fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-# #                print(exc_type, fname, exc_tb.tb_lineno,e)
-
-#                 x_new_cen.append(np.nan)
-#                 y_new_cen.append(np.nan)
-#                 cp_dist.append(np.nan)
-#                 fwhm_list.append(np.nan)
-#                 pass
 
         data_new_frame[filter_]        = data_update[catalog_syntax[filter_]]
         data_new_frame[filter_+'_err'] = data_update[catalog_syntax[filter_+'_err']]
@@ -595,15 +593,12 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
         data_new_frame = data_new_frame[~np.isnan(data_new_frame['x_pix'])]
         data_new_frame = data_new_frame[~np.isnan(data_new_frame['y_pix'])]
 
-        print('Number of sources from catalog: ',len(data_new_frame))
+        logger.info('Number of sources from catalog: %d' %len(data_new_frame))
 
         warnings.filterwarnings("default")
 
     except Exception as e:
-
-                exc_type, exc_obj, exc_tb = sys.exc_info()
-                fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                print(exc_type, fname, exc_tb.tb_lineno,e)
-                cp_dist.append( np.nan )
+        logger.exception(e)
+        cp_dist.append( np.nan )
 
     return data_new_frame,syntax

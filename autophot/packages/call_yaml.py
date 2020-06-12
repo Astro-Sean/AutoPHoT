@@ -41,36 +41,20 @@ class yaml_syntax(object):
 
         return data
 
-    def update_vars(self,key,new_val):
+    def update_var(self,tele,inst_key,inst,key,new_val):
 
-
-
-        import ruamel
-        import ruamel.yaml
-
-
-        with open(self.filepath,'r') as yamlfile:
-            doc = ruamel.yaml.load(yamlfile, Loader=ruamel.yaml.RoundTripLoader,preserve_quotes=True)
-
-            doc[self.dict_name][str(key)] =  new_val
-
-        with open(self.filepath,'w') as yamlfile:
-            ruamel.yaml.dump(doc,yamlfile, Dumper=ruamel.yaml.RoundTripDumper)
-
-    def new_vars(self,key,val):
-
-        import ruamel
-        import ruamel.yaml
-        doc = {self.dict_name:{key:val}}
+        import yaml
+        doc = {key:new_val}
 
         with open(self.filepath,'r') as yamlfile:
 
+            cur_yaml = yaml.safe_load(yamlfile)
 
-            cur_yaml = ruamel.yaml.load(yamlfile, Loader=ruamel.yaml.RoundTripLoader,preserve_quotes=True)
-            cur_yaml.update(doc)
+            cur_yaml[tele][inst_key][inst].update(doc)
 
-        with open(self.filepath,'w') as yamlfile:
-            ruamel.yaml.dump(cur_yaml,yamlfile, Dumper=ruamel.yaml.RoundTripDumper)
+        with open(self.filepath,'w+') as yamlfile:
+            yaml.safe_dump(cur_yaml, yamlfile,default_flow_style=False)
+
 
 
     def create_yaml(fname,data):

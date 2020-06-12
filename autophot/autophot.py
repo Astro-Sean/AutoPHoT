@@ -15,6 +15,7 @@ print(r"""
          Email: sean.brennan2@ucdconnect.ie
 ---------------------------------------
 
+
 """)
 
 
@@ -34,8 +35,8 @@ from autophot.packages.run import run_autophot
 import time
 from urllib.request import urlopen
 import matplotlib
-matplotlib.use('Agg') # Does not display figures to users
 
+matplotlib.use('Agg') # Does not display figures to users
 
 
 def internet_on():
@@ -47,18 +48,19 @@ def internet_on():
         return False
 
 if not internet_on():
-    print('Not connected to internet - some packages may not work')
+    print('Not connected to internet - some packages may not work\n')
 else:
-    print('Connected to internet')
-
+    print('Connected to internet\n')
 
 
 def run(syntax):
 
     #  Run AutoPhOT with instructurions given by syntax dictionary
     start = time.time()
-
-    print('> Using directory from input.yml: %s'  % syntax['fits_dir'] )
+    if syntax['fits_dir']:
+        print('Directory of input fits file: %s'  % syntax['fits_dir'] )
+    else:
+        print('Work on single file: %s'  % syntax['fname'] )
 
     '''
     Run complete autophot package for complete photometric reduction

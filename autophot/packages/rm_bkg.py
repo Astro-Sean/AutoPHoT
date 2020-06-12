@@ -1,53 +1,77 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Wed Nov 14 16:49:01 2018
 
-@author: seanbrennan
-"""
+def subtract_bkg(source,
+                 syntax,
+                 xc=0,
+                 yc=0):
 
-from photutils import CircularAperture
-from astropy.stats import SigmaClip
-from photutils import Background2D, MedianBackground,BkgZoomInterpolator
+    import logging
+    import warnings
+    import numpy as np
+    from astropy.stats import SigmaClip
+    from photutils import Background2D, MedianBackground
+    from autophot.packages.aperture import ap_phot
+    from astropy.modeling import models, fitting
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        if syntax['psf_bkg_surface']:
+
+            sigma_clip = SigmaClip(sigma=syntax['Lim_SNR'])
+            bkg_estimator = MedianBackground()
+            bkg = Background2D(source,
+                               (3, 3),
+                               filter_size=(5, 5),
+                               sigma_clip=sigma_clip,
+                               bkg_estimator=bkg_estimator)
 
 
+            surface = bkg.background
 
-def rm_surface(close_up,syntax,center = None,radius = None):
-    # Add in fwhm info here!
-    
-    if center == None:
-        center = [syntax['scale'],syntax['scale']]
-    
-    if radius == None:
-        radius = syntax['fwhm_guess']
+            bkg_median = np.nanmedian(bkg.background_median)
 
-    
-    aperture = CircularAperture((center[0],center[1]),
-                                r=radius)
+            source_bkg_free = source - surface
 
-    mask = aperture.to_mask(method='center')
-    
+        if syntax['psf_bkg_poly']:
 
-    
-#    mask = masks[0]
-    
-    image = mask.to_image(shape=((close_up.shape[1],close_up.shape[0])))
-    
-    
-    sigma_clip = SigmaClip(sigma=3., maxiters=5)
-    
-    bkg_estimator = MedianBackground()
-    
-    bkg_interpolator = BkgZoomInterpolator()
-    
-    bkg1 = Background2D(close_up,
-                        box_size =  (2, 2), 
-                        filter_size=(2, 2),
-                        sigma_clip=sigma_clip,
-                        bkg_estimator=bkg_estimator,
-                        mask = image,
-                        interpolator = bkg_interpolator,
-                        )
-    back3 = bkg1.background
-    
-    return close_up-back3, back3, bkg1
+
+            surface_function_init = models.Polynomial2D(degree=syntax['psf_bkg_poly_degree'])
+
+            fit_surface = fitting.LevMarLSQFitter()
+
+            x = np.arange(0,source.shape[0])
+            y = np.arange(0,source.shape[0])
+            xx,yy= np.meshgrid(x,y)
+
+            with warnings.catch_warnings():
+                # Ignore model linearity warning from the fitter
+                warnings.simplefilter('ignore')
+                surface_fit = fit_surface(surface_function_init, xx, yy, source)
+
+            surface = surface_fit(xx,yy)
+
+            bkg_median = np.nanmedian(surface)
+            source_bkg_free = source - surface
+
+
+        if syntax['psf_bkg_local']:
+
+            pos = list(zip([xc],[yc]))
+
+            ap,bkg = ap_phot(pos,
+                             source,
+                             radius = syntax['ap_size'] * syntax['fwhm'],
+                             r_in   = syntax['r_in_size'] * syntax['fwhm'],
+                             r_out  = syntax['r_out_size'] * syntax['fwhm'])
+
+            source_bkg_free = source - ( np.ones(source.shape) * bkg)
+
+            bkg_median = bkg[0]
+
+    except Exception as e:
+        logger.exception(e)
+
+    return source_bkg_free,bkg_median
+

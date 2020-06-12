@@ -141,6 +141,7 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
 
     import pandas as pd
     import lmfit
+    import logging
 
     import sys,os
     import matplotlib.pyplot as plt
@@ -154,6 +155,9 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
     from autophot.packages.aperture  import ap_phot
 
     try:
+
+        logger = logging.getLogger(__name__)
+
         image = base_image.copy()
 
         fitting_radius = int(np.ceil(fwhm))
@@ -166,7 +170,7 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
         construction_sources = []
 
         if regriding_size % 2 > 0:
-            print('regrid size must be even adding 1')
+            logger.info('regrid size must be even adding 1')
             regriding_size += 1
 
         # Residual Table in extended format
@@ -182,7 +186,7 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
         selected_sources = selected_sources[~lower_bkg_source.mask]
 
         flux_idx = [i for i in selected_sources.flux_ap.sort_values(ascending = False).index]
-        # flux_idx = [i for i in selected_sources.dist.sort_values(ascending = True).index]
+        flux_idx = [i for i in selected_sources.dist.sort_values(ascending = True).index]
 #        flux_idx = [i for i in dist_sources.index]
 
         sources_used = 1
@@ -195,23 +199,23 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
 
         # level
         level = syntax['lim_SNR']
-        print('Limiting threshold: %s sigma' % level)
+
+        logger.info('Limiting threshold: %s sigma' % level)
 
 
         while sources_used <= syntax['psf_source_no']:
 
             if failsafe>25:
-                print('PSF - Failed to build psf')
+                logger.info('PSF - Failed to build psf')
                 residual_table=None
                 sigma_fit = fwhm
 
 
             if n >= len(flux_idx):
-
                 if sources_used  >= syntax['min_psf_source_no']:
-                    print(' > Using worst case scenario number of sources < ')
+                    logger.info('Using worst case scenario number of sources')
                     break
-                print('PSF - Ran out of sources')
+                logger.info('PSF - Ran out of sources')
                 residual_table=None
                 sigma_fit = fwhm
                 break
@@ -224,7 +228,7 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
                 psf_image = image[int(selected_sources.y_pix[idx])-syntax['scale']: int(selected_sources.y_pix[idx]) + syntax['scale'],
                                   int(selected_sources.x_pix[idx])-syntax['scale']: int(selected_sources.x_pix[idx]) + syntax['scale']]
                 if len(psf_image) == 0:
-                    print('PSF image ERROR')
+                    logger.info('PSF image ERROR')
                     continue
                 if np.min(psf_image) == np.nan:
                     continue
@@ -457,10 +461,11 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
                 psf_SNR = SNR(psf_counts,psf_bkg,syntax['exp_time'],0,syntax['ap_size']* fwhm,syntax['gain'],0)[0]
 
                 if psf_SNR < syntax['construction_SNR']:
-                    print('PSF constuction source too low: %s' % int(psf_SNR))
+                    logger.debug('PSF constuction source too low: %s' % int(psf_SNR))
                     continue
                 else:
-                    print('PSF construction source SNR: %s' % int(psf_SNR))
+                    logger.debug('PSF construction source SNR: %s' % int(psf_SNR))
+                    # print('\rPSF source %d / %d :: SNR: %d' % (int(psf_SNR)),end = '')
                     pass
 
                 xc = result.params['x0'].value
@@ -552,19 +557,17 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
 
                 residual_table += residual_roll
                 construction_sources.append([xc_global,yc_global,H/syntax['exp_time']])
-                print('Residual table updated: %s / %s ' % (str(int(sources_used)),str(int(syntax['psf_source_no']))))
+                logger.debug('Residual table updated: %d / %d ' % (sources_used,syntax['psf_source_no']))
+
+                print('\rResidual table updated: %d / %d ' % (sources_used,syntax['psf_source_no']) ,end = '')
                 sources_used +=1
 
                 sigma_fit.append(sigma)
 
             except Exception as e:
+                logger.exception(e)
 
-                print('BUILDING PSF ERROR')
-                exc_type, exc_obj, exc_tb = sys.exc_info()
-                fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                print(exc_type, fname, exc_tb.tb_lineno,e)
-
-                print('trying another source')
+                logger.error('trying another source')
                 failsafe+=1
                 n+=1
                 try:
@@ -573,12 +576,13 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
                     pass
 
                 continue
+        print('')
 
         if sources_used < syntax['min_psf_source_no']:
-            print('BUILDING PSF: Not enough useable sources found')
+            logger.warning('BUILDING PSF: Not enough useable sources found')
             return None,None,construction_sources.append([np.nan]*5),syntax
 
-        print('PSF Successful \n')
+        logger.debug('PSF Successful')
         residual_table/= sources_used
 
         residual_table  = rebin(residual_table,(2*syntax['scale'],2*syntax['scale']))
@@ -606,20 +610,14 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
         image_radius_lst = np.array(image_radius_lst)
 
         syntax['image_radius'] = image_radius_lst.mean()
-        print('Image_radius [pix] : %s +/- %s' % (round(image_radius_lst.mean(),3) ,round(image_radius_lst.std(),3)))
+        logger.info('Image_radius [pix] : %s +/- %s' % (round(image_radius_lst.mean(),3) ,round(image_radius_lst.std(),3)))
 
         # for finding error on psf, not implemented yet
         construction_sources.columns = ['x_pix','y_pix','H_psf']
         construction_sources['H_psf_err'] = [0]*len(construction_sources)
 
     except Exception as e:
-
-                print('BUILDING PSF: ',e)
-                exc_type, exc_obj, exc_tb = sys.exc_info()
-                fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                print(exc_type, fname, exc_tb.tb_lineno)
-
-
+                logger.exception('BUILDING PSF: ',e)
                 raise Exception
 
 
@@ -649,14 +647,18 @@ def fit(image,
     import pandas as pd
     import pathlib
     import lmfit
-    from lmfit import Model
-    import sys,os
+    import logging
+    # import sys,os
     import matplotlib.pyplot as plt
     from astropy.stats import SigmaClip
     from photutils import Background2D, MedianBackground
 
 
+
+
     from autophot.packages.aperture  import ap_phot
+
+    logger = logging.getLogger(__name__)
 
 
     fitting_radius = int(np.ceil(1.5*fwhm))
@@ -709,7 +711,7 @@ def fit(image,
             psf =  (sky  + (H * residual)) + core
 
             if np.isnan(np.min(psf)):
-                print(sky,H,np.min(residual),np.min(core))
+                logger.info(sky,H,np.min(residual),np.min(core))
 
             psf[np.isnan(psf)] = 0
             psf[psf<0] = 0
@@ -719,12 +721,8 @@ def fit(image,
                           int ( 0.5 * r_table.shape[0] - slice_scale): int(0.5*r_table.shape[0] + slice_scale)]
 
         except Exception as e:
-            exc_type, exc_obj, exc_tb = sys.exc_info()
-            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            print(exc_type, fname, exc_tb.tb_lineno,e)
+            logger.exception(e)
             psf = np.nan
-
-
 
         return psf
 
@@ -743,14 +741,6 @@ def fit(image,
         dy = syntax['dy']
 
 
-    # if image.shape == (2*syntax['scale'],2*syntax['scale']):
-
-    #     lower_x_bound = int(sources.x_pix[0])
-    #     lower_y_bound = int(sources.y_pix[0])
-    #     upper_x_bound = 2*syntax['scale'] - int(sources.x_pix[0])
-    #     upper_y_bound = 2*syntax['scale'] - int(sources.y_pix[0])
-
-    # else:
     lower_x_bound = syntax['scale']
     lower_y_bound = syntax['scale']
     upper_x_bound = syntax['scale']
@@ -772,16 +762,18 @@ def fit(image,
     Known issue - for poor images, some sources may be too close to boundary, remove this
     '''
     if not return_fwhm:
-        print('Image cutout size: (%.f,%.f) (%.f,%.f)' % ((lower_x_bound,upper_x_bound,lower_y_bound,upper_y_bound)))
+        logger.info('Image cutout size: (%.f,%.f) (%.f,%.f)' % ((lower_x_bound,upper_x_bound,lower_y_bound,upper_y_bound)))
 
     sources = sources[sources.x_pix < image.shape[1] - upper_x_bound]
     sources = sources[sources.x_pix > lower_x_bound]
     sources = sources[sources.y_pix < image.shape[0] - upper_y_bound]
     sources = sources[sources.y_pix > lower_y_bound]
 
-    print('Fitting PSF to %.f sources' % len(sources))
+    logger.info('Fitting PSF to %d sources' % len(sources))
 
     for n  in range(len(sources.index)):
+        if return_fwhm:
+            print('\rFitting PSF to source: %d / %d' % (n+1,len(sources)), end = '',flush=False)
         try:
 
             idx = list(sources.index)[n]
@@ -863,15 +855,11 @@ def fit(image,
                         bkg_median = bkg[0]
 
                 except Exception as e:
-                    exc_type, exc_obj, exc_tb = sys.exc_info()
-                    fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                    print(exc_type, fname, exc_tb.tb_lineno,e)
+                    logger.exception(e)
 
 
             source = source_bkg_free[int(source_bkg_free.shape[1]/2 - fitting_radius):int(source_bkg_free.shape[1]/2 + fitting_radius) ,
                                      int(source_bkg_free.shape[0]/2 - fitting_radius):int(source_bkg_free.shape[0]/2 + fitting_radius) ]
-
-
 
             if source.shape != (int(2*fitting_radius),int(2*fitting_radius)):
                 bkg_median = np.nan
@@ -881,7 +869,7 @@ def fit(image,
                 continue
 
             if np.sum(np.isnan(source)) == len(source):
-                print('all nan image')
+                logger.warning('all nan image')
                 continue
 
 
@@ -896,7 +884,7 @@ def fit(image,
             xx_sl,yy_sl= np.meshgrid(x_slice,x_slice)
 
             if return_fwhm:
-                print('Fitting gaussian to source to get FWHM')
+                logger.info('Fitting gaussian to source to get FWHM')
 
                 pars = lmfit.Parameters()
                 pars.add('A',value = np.nanmax(source),min = 1e-5)
@@ -914,7 +902,7 @@ def fit(image,
 
                 source_fwhm = result.params['sigma'].value  * 2*np.sqrt(2 * np.log(2))
 
-                print('Target FWHM: %s' % round(source_fwhm,3))
+                logger.info('Target FWHM: %.3f' % source_fwhm)
 
             try:
 
@@ -942,15 +930,14 @@ def fit(image,
                 H_psf_err = result.params['A'].stderr
 
 
+
             except Exception as e:
-                print(source)
-                exc_type, exc_oba, exc_tb = sys.exc_info()
-                fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                print(exc_type, fname, exc_tb.tb_lineno,e)
+                logger.exception(e)
                 continue
 
             best = 2
             cf68 = [1,3]
+
             # This is temporary
             H_psf_err = 0
 
@@ -975,7 +962,7 @@ def fit(image,
                 H_psf_err = result.params['A'].stderr
 
             else:
-                print('Error no computed')
+                logger.warning('Error not computed')
                 H_psf_err = 0
 
             psf_params.append((idx,bkg_median,H,H_psf_err))
@@ -984,14 +971,11 @@ def fit(image,
 
                 try:
 
-
                     image_section = image[int(yc_global -  syntax['scale']): int(yc_global + syntax['scale']),
                                           int(xc_global -  syntax['scale']): int(xc_global + syntax['scale'])].copy()
 
-
                     image[int(yc_global  - syntax['scale']): int(yc_global +  syntax['scale']),
                           int(xc_global  - syntax['scale']): int(xc_global +  syntax['scale'])] =  image_section - build_psf(xc , yc, 0, H, residual_table)
-
 
                     image_section_subtraction = image_section - build_psf(xc , yc, 0, H, residual_table)
 
@@ -1042,13 +1026,11 @@ def fit(image,
                     ax_after.set_title('After')
                     ax_before.set_title('Before')
 
-                    print('Image %s / %s saved' % (str(idx),str(len(sources.index))))
+                    logger.info('Image %s / %s saved' % (str(idx),str(len(sources.index))))
                     plt.close(fig)
 
                 except Exception as e:
-                    exc_type, exc_oba, exc_tb = sys.exc_info()
-                    fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                    print(exc_type, fname, exc_tb.tb_lineno,e)
+                    logger.exception(e)
                     plt.close('all')
                     pass
 
@@ -1125,31 +1107,22 @@ def fit(image,
                         fig_source_residual.savefig(syntax['write_dir']+'target_psf_'+fname+'.pdf',
                                                     format = 'pdf')
 
-                        print('Image %s / %s saved' % (str(n+1),str(len(sources.index)) ))
+                        logger.info('Image %s / %s saved' % (str(n+1),str(len(sources.index)) ))
                     else:
 
                         pathlib.Path(syntax['write_dir']+'/'+'psf_subtractions/').mkdir(parents = True, exist_ok=True)
 
                         plt.savefig(syntax['write_dir']+'psf_subtractions/'+'psf_subtraction_{}.png'.format(int(n)))
 
-
-
-
                     plt.close(fig_source_residual)
 
                 except Exception as e:
-
-                    exc_type, exc_oba, exc_tb = sys.exc_info()
-                    fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                    print(exc_type, fname, exc_tb.tb_lineno,e)
+                    logger.exception(e)
                     plt.close('all')
 
 
         except Exception as e:
-             import sys,os
-             exc_type, exc_oba, exc_tb = sys.exc_info()
-             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-             print(exc_type, fname, exc_tb.tb_lineno,e)
+             logger.exception(e)
 
 
              bkg_median = np.nan
@@ -1159,11 +1132,11 @@ def fit(image,
              plt.close(fig_source_residual)
              continue
 
-
     new_df =  pd.DataFrame(psf_params,columns = ('idx','bkg','H_psf','H_psf_err'),index = sources.index)
 
     if return_fwhm:
         new_df['target_fwhm'] = round(source_fwhm,3)
+    print('')
 
     return pd.concat([sources,new_df],axis = 1),build_psf
 
@@ -1183,6 +1156,10 @@ def do(df,residual,syntax,fwhm):
         from photutils import aperture_photometry
         from scipy.integrate import dblquad
         import sys,os
+        import logging
+
+
+        logger = logging.getLogger(__name__)
 
         xc = syntax['scale']
         yc = syntax['scale']
@@ -1225,7 +1202,7 @@ def do(df,residual,syntax,fwhm):
     except Exception as e:
         exc_type, exc_oba, exc_tb = sys.exc_info()
         fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-        print(exc_type, fname, exc_tb.tb_lineno,e)
+        logger.info(exc_type, fname, exc_tb.tb_lineno,e)
         df = np.nan
 
     return df,syntax

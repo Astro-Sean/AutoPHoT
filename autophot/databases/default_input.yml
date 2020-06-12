@@ -6,16 +6,19 @@ AutoPhOT_input:
   # Initial parameters setup #
 
   # Directory where files are, doesn't matter if they're in folders, it will look for ( .fits .fts .fit )extension,
+  fits_dir: null
 
-  fits_dir:
+   # work on single file
+  fname: null
+  
   #Location of where tns queries are saved as yaml files
-  object_dir:
+  object_dir: null
 
   # Colout term directory - not yet implemented
-  ct_dir:
+  ct_dir: null
 
   # Location of calibration files
-  calib_dir:
+  calib_dir: null
 
   # Reduce data
   reduce: False
@@ -35,7 +38,7 @@ AutoPhOT_input:
   # Force to use of psf fitting
   force_psf: False
 
-  # skip lmag if target is bright enough 
+  # skip lmag if target is bright enough
   skip_lmag: False
 
   # User template
@@ -91,8 +94,13 @@ AutoPhOT_input:
   do_zeropoint: True
   do_mag_lim: True
   get_lim_mag: false
-  get_lim_mag_test: true
+  get_lim_mag_prob: true
+
   do_catalog: True # Broken leave as true
+
+
+  use_local_stars: False
+  use_local_stars_dist: 500 #in pixels from target
 
   #=====================================
   # Photometry on all sources in field
@@ -321,6 +329,9 @@ AutoPhOT_input:
   guess_scale: False
   downsample: 2
   solve_field_timeout: 30 #seconds
+
+  # update telescope.yml from output of astrometry.net
+  update_wcs_scale: True
 
   #=====================================
   # HOTPANTS
