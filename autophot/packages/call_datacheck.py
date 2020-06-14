@@ -23,10 +23,16 @@ def checkteledata(syntax,flst,filepath = None):
     # Get header information - priporeity script
     from autophot.packages.functions import getheader
 
-    logger = logging.getLogger(__name__)
+    try:
+        logger = logging.getLogger(__name__)
+    except:
+        import logging as logger
+
+
 
     #  if specific filepath isn't given, use default
     if filepath == None:
+
         filepath = os.path.join(syntax['wdir'],'telescope.yml')
         logger.info('User instrument database: %s' % str(filepath))
 
@@ -155,7 +161,7 @@ def checkteledata(syntax,flst,filepath = None):
             tele = headinfo[tele_key]
             inst = headinfo[inst_key]
 
-            print('Telescope: %s :: Instrument: %s' % (tele,inst))
+            # print('Telescope: %s :: Instrument: %s' % (tele,inst))
 
 
             #  add name of telescope (from our keyword) to list of telescopes
