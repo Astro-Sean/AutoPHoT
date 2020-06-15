@@ -44,8 +44,10 @@ def run_autophot(syntax):
     # Create new directory within working directory
     #==================================================================
 
-    if syntax['fname']:
+    # fit fname defined and not fits_dir add file location to fits flists
+    if syntax['fname'] != None:
         flist = [syntax['fname']]
+        syntax['fits_dir'] = os.path.dirname(syntax['fname'])
 
     else:
         new_dir = '_' + syntax['outdir_name']

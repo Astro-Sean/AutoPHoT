@@ -10,7 +10,7 @@ AutoPhOT_input:
 
    # work on single file
   fname: null
-  
+
   #Location of where tns queries are saved as yaml files
   object_dir: null
 
@@ -70,7 +70,7 @@ AutoPhOT_input:
   regroup: false
 
   # if the code fails with some files yet to be done, turn to true, will scan through output directory and see whats already been done
-  restart: False
+  restart: True
 
   # recovery of each target_out.csv file
   recover: True
@@ -88,7 +88,6 @@ AutoPhOT_input:
 
   # Use header ra and dec to get target
   use_header_radec: false
-
   do_phot: True
   do_subtraction: False
   do_zeropoint: True
@@ -322,7 +321,7 @@ AutoPhOT_input:
   #=====================================
 
   # location of solve-field from astromety.net
-  solve_field_exe_loc: /usr/local/Cellar/astrometry-net/0.78_1/bin/solve-field
+  solve_field_exe_loc: None
   offset_param: 10.0         # mean pixel distance criteria between trusting original WCS and looking it up
   search_radius: 1.0
 
@@ -337,7 +336,7 @@ AutoPhOT_input:
   # HOTPANTS
   #=====================================
 
-  hotpants_exe_loc: '/usr/local/hotpants/hotpants'
+  hotpants_exe_loc: None
   hotpants_timeout: 300 #seconds
 
   #=====================================
