@@ -47,12 +47,13 @@ def run_autophot(syntax):
     # fit fname defined and not fits_dir add file location to fits flists
     if syntax['fname'] != None:
         flist = [syntax['fname']]
-        syntax['fits_dir'] = os.path.dirname(syntax['fname'])
+        syntax['restart'] = False
 
     else:
         new_dir = '_' + syntax['outdir_name']
         base_dir = os.path.basename(syntax['fits_dir']).replace(new_dir,'')
         work_loc = base_dir + new_dir
+
         pathlib.Path(dirname(syntax['fits_dir'])+'/'+work_loc).mkdir(parents = True, exist_ok=True)
         os.chdir(dirname(syntax['fits_dir'])+'/'+work_loc)
 

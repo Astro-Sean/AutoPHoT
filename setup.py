@@ -1,12 +1,14 @@
 import setuptools
 
+
 # Utility function to read the README file.
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
+
 setuptools.setup(
     name="autophot",
-    version="0.1",
+    version="0.1.1",
     author="Sean Brennan",
     author_email="sean.brennan2@ucdconnect.ie",
     description="Automated Photometry of Transients",

@@ -97,4 +97,7 @@ Basic operation of AutoPhOT for complete photometric calibration of a transient
 ## Version History
 
 * 0.1
-    Initial upload
+    - Initial upload
+* 0.1.1
+    - Fixed error opening fits image
+    - Adjusted directory creating sequence

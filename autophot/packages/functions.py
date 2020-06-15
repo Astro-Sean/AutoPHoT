@@ -47,16 +47,25 @@ def getheader(fpath):
 
     return headinfo
 
+
+'''
+Function to find image for fileptha
+
+'''
 def getimage(fpath):
 
     from astropy.io import fits
 
     try:
+        image = fits.getdata(fpath,'sci','i')
+    except:
         with fits.open(fpath,ignore_missing_end=True) as hdul:
             hdul.verify('silentfix+ignore')
-            image = hdul[1].data
-    except:
-        image = fits.getdata(fpath)
+            image = hdul[0].data
+
+
+    if len(image.shape) != 2:
+        print('error not 2-D array')
 
     return image
 

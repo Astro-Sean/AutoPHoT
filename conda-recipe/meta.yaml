@@ -1,6 +1,9 @@
+{% set data = load_setup_py_data(setup_file='../setup.py', from_recipe_dir=True) %}
+
+
 package:
   name: autophot
-  version: 0.1
+  version: {{ data.get('version') }}
 
 source:
   path: ../
@@ -23,7 +26,7 @@ requirements:
     - astroquery >=0.4
     - astroscrappy >=1.0.8
     - photutils >=0.7.2
-    
+
 test:
   imports:
     - autophot

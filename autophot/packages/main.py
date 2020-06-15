@@ -181,6 +181,12 @@ def main(object_info,syntax,fpath):
         output = collections.OrderedDict({})
 
 
+        if syntax['fits_dir'].endswith('/'):
+            syntax['fits_dir'] = syntax['fits_dir'][:-1]
+
+        if syntax['wdir'].endswith('/'):
+            syntax['wdir'] = syntax['wdir'][:-1]
+
 # =============================================================================
 # Prepare new file
 # =============================================================================
@@ -194,12 +200,15 @@ def main(object_info,syntax,fpath):
             wdir = syntax['fits_dir']
             new_dir = '_' + syntax['outdir_name']
 
-            base_dir = os.path.basename(wdir).replace(new_dir,'')
-            work_loc = os.path.join(base_dir,new_dir)
+
+            base_dir = os.path.basename(wdir)
+            work_loc = base_dir + new_dir
+
+            new_output_dir = os.path.join(dirname(wdir) ,work_loc)
 
             # create new output directory is it doesn't exist
-            pathlib.Path(dirname(wdir)+'/'+work_loc.replace(' ','')).mkdir(parents = True, exist_ok=True)
-            os.chdir(dirname(wdir)+'/'+work_loc)
+            pathlib.Path(new_output_dir).mkdir(parents = True, exist_ok=True)
+            os.chdir(new_output_dir)
 
 
         '''
@@ -229,7 +238,7 @@ def main(object_info,syntax,fpath):
 
             sub_dirs = [i.replace('_APT','').replace(' ','_') for i in sub_dirs]
 
-            cur_dir = dirname(wdir)+'/'+ work_loc
+            cur_dir = new_output_dir
 
         else:
             sub_dirs = ['']
@@ -737,7 +746,10 @@ def main(object_info,syntax,fpath):
                    '''
 
                    # translate pixel values to ra,dec at center of image
-                   n = w1.all_pix2world([image.shape[1]/2],[image.shape[0]/2],0 )
+                   n = w1.all_pix2world([image.shape[1]/2],[image.shape[0]/2],1,maxiter=20,
+                                           tolerance=1.0e-4, adaptive=False,
+                                           detect_divergence=False,
+                                           quiet=False )
 
                    # get ra,dec in deg/SkyCoord format
                    target_coords = SkyCoord(n[0][0] , n[1][0] ,unit = (u.deg,u.deg))
