@@ -101,3 +101,5 @@ Basic operation of AutoPhOT for complete photometric calibration of a transient
 * 0.1.1
     - Fixed error opening fits image
     - Adjusted directory creating sequence
+    - added convergence parameters to world_2_pix
+    - added version to __init__
