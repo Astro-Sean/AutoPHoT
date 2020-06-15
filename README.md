@@ -25,6 +25,7 @@ email: sean.brennan2@ucdconnect.ie [subject: github autophot]**
 
 ## Installation
 
+**Some users reporting installation hanging during solving environment - currently looking into this - as always creating a fresh conda environment solves the issue**
 
 * Some packages require conda-forge in channel list:
 
@@ -32,7 +33,7 @@ email: sean.brennan2@ucdconnect.ie [subject: github autophot]**
 conda config --add channels conda-forge.
 ```
 
-* Install AutoPhOTv via conda istall:
+* Install AutoPhOT via conda istall:
 
 ```bash
 conda install -c astro-sean autophot
