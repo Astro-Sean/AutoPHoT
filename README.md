@@ -19,9 +19,9 @@ email: sean.brennan2@ucdconnect.ie [subject: github autophot]**
 
 ## Developer notes
 
- * Colour terms still in testing/development
+ * Colour terms still in testing/development and **not** in current build
  * Currently astrometry.net, HOTPANTS and astoalign needs to be installed by USER.
- * PSF selection will look for bright isolated sources, however this can lead to sources being selected near the image boundaries. Future update with annulus selection procedure
+ * PSF selection will look for bright isolated sources, however this can lead to sources being selected near the image boundaries which can cause large errors, especially in IR bands. Future update with annulus selection procedure and spacial variant PSF.
 
 ## Installation
 
@@ -46,10 +46,10 @@ pip install astroalign
 ```
 
 * Code relies on [Astrometry.net](https://arxiv.org/abs/0910.2233) by Dustin Lang to solve for WCS. Code can be downloaded/installed [here](http://astrometry.net/doc/readme.html) and [here](http://astrometry.net/doc/build.html#build.).
-Once installed, locate the solve-field executable [default location: /usr/local/astrometry/bin/solve-field] and update (if needed) 'solve_field_exe_loc' in syntax (see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb)). If the user trusts there WCS this step can be ignore as Astrometry.net is not used.
+Once installed, locate the solve-field executable [default location: /usr/local/astrometry/bin/solve-field] and update (if needed) 'solve_field_exe_loc' in syntax (see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb)). **If the user trusts there WCS this step can be ignore as Astrometry.net is not used.**
 
 
-* Image subtraction uses [HOTPANTS](http://www.ascl.net/1504.004) by Andy Becker - HOTPANTS can be found [here](https://github.com/acbecker/). Once installed, locate the hotpants executable and update 'hotpants_exe_loc' in syntax see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb). If the user has no need for image subtraction this step can be ignored.
+* Image subtraction uses [HOTPANTS](http://www.ascl.net/1504.004) by Andy Becker - HOTPANTS can be found [here](https://github.com/acbecker/). Once installed, locate the hotpants executable and update 'hotpants_exe_loc' in syntax see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb). **If the user has no need for image subtraction this step can be ignored.**
 
 
 **Known error with installation of HOTPANTS**
@@ -86,9 +86,14 @@ to every .c file.
 
 * Awaiting user feedback
 
+
+## Testing
+
+* If you experience errors with a particular file, the most effective means of debug is to share the file with a developer for diagnostic. Once bugs have been addressed all files will be deleted. **All shared data will be kept confidential**.
+
 ## Flowcahrt
 
-Basic operation of AutoPhOT for complete photometric calibration of a transient
+Basic operation of AutoPhOT for complete photometric calibration of a transient as shown [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb).
 
 <p align="center">
   <img src=https://github.com/Astro-Sean/autophot/blob/master/flowchart.png>
@@ -101,5 +106,5 @@ Basic operation of AutoPhOT for complete photometric calibration of a transient
 * 0.1.1
     - Fixed error opening fits image
     - Adjusted directory creating sequence
-    - added convergence parameters to world_2_pix
-    - added version to __init__
+    - added convergence parameters to world_2_pix in *main.py*
+    - added version to *autophot/__init__.py*
