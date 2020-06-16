@@ -32,6 +32,11 @@ email: sean.brennan2@ucdconnect.ie [subject: github autophot]**
 ```bash
 conda config --add channels conda-forge.
 ```
+as well as the astropy channel:
+
+```bash
+conda config --add channels astropy
+```
 
 * Install AutoPhOT via conda istall:
 
