@@ -77,11 +77,7 @@ to every .c file.
 
 ## Usage
 
-* For quick use see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb).
-
-* For an example on the preparation and file structure (although this is automated in quick use example) see [here](https://github.com/Astro-Sean/autophot/blob/master/example_call_database.ipynb).
-
-* For more detailed explanation see here (work in progress)
+* Check out series of Jupyter Notebooks for AutoPhOT [here](https://github.com/Astro-Sean/autophot/tree/master/example_notebooks)
 
 ## Referencing
 
