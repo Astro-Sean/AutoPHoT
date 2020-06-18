@@ -14,6 +14,6 @@ Basic example on how to preform photometry on example fits image
 
 In depth look on how to setup telescope.yml file for quick photometry
 
-* [add_your_catalog_example](https://github.com/Astro-Sean/autophot/blob/master/example_notebooks/eadd_your_catalog_example.ipynb)
+* [add_your_catalog_example](https://github.com/Astro-Sean/autophot/blob/master/example_notebooks/add_your_catalog_example.ipynb)
 
 How to use your own photometic catalog
