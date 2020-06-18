@@ -177,7 +177,7 @@ def limiting_magnitude_prob(syntax,image,model =None,r_table=None):
         # Mask out center region
         mask_image  = (image_no_surface ) * (1-mask.to_image(image.shape))
 
-        number_of_points = 1000
+        number_of_points = 250
 
         fake_points = {}
         for i in range(number_of_points):
@@ -256,7 +256,7 @@ def limiting_magnitude_prob(syntax,image,model =None,r_table=None):
         ax0.axvline(mean +  level*std,**line_kwargs)
         ax0.text(mean + level*std,np.max(n),r'$'+str(level)+r'\sigma$')
 
-        x_fit = np.linspace(ax0.get_xlim()[0], ax0.get_xlim()[1], 1000)
+        x_fit = np.linspace(ax0.get_xlim()[0], ax0.get_xlim()[1], 250)
 
         ax0.plot(x_fit, gauss(x_fit,*popt),label = 'Gaussian Fit',color = 'red')
 
@@ -271,8 +271,8 @@ def limiting_magnitude_prob(syntax,image,model =None,r_table=None):
         ax2.set_title('Image - Surface')
 
 
-        x = random.sample(range(0,int(image.shape[0])), int(image.shape[0])//3)
-        y = random.sample(range(0,int(image.shape[1])), int(image.shape[0])//3)
+        x = random.sample(range(5,int(image.shape[0])), 10)
+        y = random.sample(range(5,int(image.shape[1])), 10)
 
         counts = abs(mean + level*std)
 

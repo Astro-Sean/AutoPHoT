@@ -97,7 +97,6 @@ AutoPhOT_input:
 
   do_catalog: True # Broken leave as true
 
-
   use_local_stars: False
   use_local_stars_dist: 500 #in pixels from target
 
@@ -106,7 +105,8 @@ AutoPhOT_input:
   #=====================================
 
   do_all_phot_sigma: 15
-    # Do all phot
+
+  # Do all phot
   do_all_phot: False
   do_all_sub: False
   make_limiting_gif: False
@@ -116,7 +116,10 @@ AutoPhOT_input:
   #=====================================
 
   # choose catalog to use - options: [pan_starrs,2mass,apass,skymapper,gaia]
-  catalog: skymapper
+  catalog: null
+
+  # If using a custom catalog look in this fpath
+  catalog_custom_fpath: null
 
   # Radius [degs]  around target for catalog source detection
   radius: 0.25
@@ -141,13 +144,13 @@ AutoPhOT_input:
 
   # Name of what you want to perform photometric on, uses TNS api
   #. set to None and use target_ra and target_dec [degs] to manually choose target
-  target_name:
+  target_name: null
 
   # if no filter given, use force filter
   force_filter: r
 
-  target_ra:
-  target_dec:
+  target_ra: null
+  target_dec: null
 
   # using catalog given by force_catalog_csv_name - need to test this
   force_catalog_csv: false
@@ -167,7 +170,7 @@ AutoPhOT_input:
   #=====================================
 
   # Source Detection  initial threshold value, will iterate through - quite buggy - for good images 10 should be grand
-  threshold_value: 200
+  threshold_value: 100
   #some values use in iteration to find good sources, leave alone
   fudge_factor: 5
   fine_fudge_factor: 0.2
@@ -183,11 +186,11 @@ AutoPhOT_input:
   fwhm_iters: 3
 
   # remove saturated sources
-  remove_sat: True
+  remove_sat: False
 
   #ignore any sources within pix_bound from edge
   remove_boundary_sources: true
-  pix_bound: 25
+  pix_bound: 10
 
   # min and max allow sources when doing source detection to find fwhm
   min_source_lim: 2
@@ -284,15 +287,11 @@ AutoPhOT_input:
   # PSF fitting
   #=====================================
 
-  # backgroun. estimation for psf fitting - median background from annulus of it surface
-  bkg_local: true
-  bkg_surface: False
-
   # Number of sources used in psf (if available)
-  psf_source_no: 6
+  psf_source_no: 10
 
   # worst cause scenario use this many psf sources
-  min_psf_source_no: 2
+  min_psf_source_no: 3
 
   norm_count_sum: 0.99
 
@@ -303,14 +302,14 @@ AutoPhOT_input:
   r_table_shift_check: False
 
   # regrid value for building psf -  value of 4 is grand
-  regrid_size: 6
+  regrid_size: 8
 
   # only use sources if their SNR is greater than this values
   construction_SNR: 100
 
   # Psf pixel limit - amount psf can move around from source location
-  dx: 5
-  dy: 5
+  dx: 7
+  dy: 7
 
   # error estimate of psf fit from covariance matrix
   use_confinterval: false #<- broken
@@ -331,6 +330,8 @@ AutoPhOT_input:
 
   # update telescope.yml from output of astrometry.net
   update_wcs_scale: True
+
+  allow_recheck: True
 
   #=====================================
   # HOTPANTS

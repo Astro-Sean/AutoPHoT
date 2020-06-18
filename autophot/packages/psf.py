@@ -176,7 +176,8 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
         # Residual Table in extended format
         residual_table = np.zeros((2 * syntax['scale'] * regriding_size, 2 * syntax['scale']*regriding_size))
 
-        selected_sources['dist'] =  r_dist(syntax['target_x_pix'],selected_sources.x_pix ,syntax['target_y_pix'],selected_sources.y_pix)
+        selected_sources['dist'] =  r_dist(syntax['target_x_pix'],selected_sources.x_pix,
+                                           syntax['target_y_pix'],selected_sources.y_pix)
 
         lower_bkg_source = sigma_clip(selected_sources['median'],
                                       sigma=3,
@@ -187,7 +188,6 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
 
         flux_idx = [i for i in selected_sources.flux_ap.sort_values(ascending = False).index]
         flux_idx = [i for i in selected_sources.dist.sort_values(ascending = True).index]
-#        flux_idx = [i for i in dist_sources.index]
 
         sources_used = 1
         n = 0

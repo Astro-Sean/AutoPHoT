@@ -22,10 +22,13 @@ def run_autophot(syntax):
     import pathlib
     import pandas as pd
     from os.path import dirname
-    import inspect
     import re
     import numpy as np
     from functools import reduce
+    import logging
+
+
+    logger = logging.getLogger(__name__)
 
 
     flist_new = []
@@ -135,27 +138,24 @@ def run_autophot(syntax):
 # For new catalog: please email developer
 # =============================================================================
 
+    # Syntax translation file
     filepath ='/'.join(os.path.dirname(os.path.abspath(__file__)).split('/')[0:-1])
-
     catalog_syntax_yml = 'catalog.yml'
     catalog_syntax = cs(os.path.join(filepath+'/databases',catalog_syntax_yml),syntax['catalog']).load_vars()
 
+    #  If catalog set to cutsom
     if syntax['catalog'] == 'custom':
+        target = syntax['target_name']
+        fname = str(target) + '_RAD_' + str(float(syntax['radius']))
 
-       currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-       dir_name = currentdir+'/'+'catalog_queries'
-       catalog_dir = syntax['catalog']
-       target = syntax['target_name']
-       target_dir =  dir_name + '/' + catalog_dir+'/'+target.lower()
-       fname = str(target) + '_RAD_' + str(float(syntax['radius']))
+        if not syntax['catalog_custom_fpath']:
+            logger.critical('Custoim catalog selected but "catalog_custom_fpath" not defined')
+            exit()
+        else:
+            fname = syntax['catalog_custom_fpath']
 
-       if syntax['force_catalog_csv']:
-           print('Using '+syntax['force_catalog_csv_name']+' as catalog')
-           fname = str(syntax['force_catalog_csv_name']) + '_RAD_' + str(float(syntax['radius']))
-
-       custom_table_data =pd.read_csv(target_dir +'/'+ fname+'.csv')
-       available_filters = [i for i,_ in catalog_syntax.items() if i in list(custom_table_data.columns)]
-
+        custom_table_data =pd.read_csv(fname)
+        available_filters = [i for i,_ in catalog_syntax.items() if i in list(custom_table_data.columns)]
     else:
         available_filters = [i for i,_ in catalog_syntax.items()]
 

@@ -180,9 +180,9 @@ def main(object_info,syntax,fpath):
         # Preparing output dictionary
         output = collections.OrderedDict({})
 
-
-        if syntax['fits_dir'].endswith('/'):
-            syntax['fits_dir'] = syntax['fits_dir'][:-1]
+        if syntax['fits_dir'] != None:
+            if syntax['fits_dir'].endswith('/'):
+                syntax['fits_dir'] = syntax['fits_dir'][:-1]
 
         if syntax['wdir'].endswith('/'):
             syntax['wdir'] = syntax['wdir'][:-1]
@@ -1219,8 +1219,8 @@ def main(object_info,syntax,fpath):
                     '''
                     Get weighted average of zeropoints weighted by their magnitude errors
                     '''
-                    zpoint_err_clip[zpoint_err_clip ==0] = 1e-30
-                    zpoint_err_clip[np.isnan(zpoint_err_clip)] = 1e-30
+                    zpoint_err_clip[zpoint_err_clip == 0] = 1e-5
+                    zpoint_err_clip[np.isnan(zpoint_err_clip)] = 1e-5
 
                     # return value [zp_wa[0]] and error  [zp_wa[1]]
                     zp_wa =  weighted_avg_and_std(np.array(zpoint_clip),np.sqrt(1/zpoint_err_clip))
@@ -1268,8 +1268,6 @@ def main(object_info,syntax,fpath):
                 # Error in observed magnitude
                 c['mag_'+str(use_filter)+'_err'] = np.sqrt(c_SNR_err**2 + zp_wa[1]**2)
 
-
-
 # =============================================================================
 # Plot of image with sources used and target
 # =============================================================================
@@ -1297,15 +1295,16 @@ def main(object_info,syntax,fpath):
                     ax.scatter(np.array(c.x_pix),np.array(c.y_pix),
                                marker = '+',
                                color = 'red',
-
-                               label = 'Centroiding [%s]' % str(len(c.x_pix)))
+                               label = 'Centroiding [%d]' % len(c.x_pix),
+                               zorder = 100)
 
                     ax.scatter(x_pix_sources,y_pix_sources,
                                marker = 'o',
                                facecolor = 'None',
                                color = 'blue',
-
-                               label = 'Catalog sources [%s]' % str(len(x_pix_sources)))
+                               label = 'Catalog sources [%d]' % len(x_pix_sources),
+                               zorder = 99
+                               )
 
                     if syntax['target_name'] != 'None':
                         tname = syntax['target_name']
@@ -1317,8 +1316,8 @@ def main(object_info,syntax,fpath):
                                facecolor = 'None',
                                color = 'green',
                                label = 'Target: %s' % tname)
-                    if not do_ap:
 
+                    if not do_ap:
                         ax.scatter(psf_heights.x_pix,psf_heights.y_pix,
                                    marker = '*',
                                    color = 'orange',

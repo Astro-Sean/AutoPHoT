@@ -194,7 +194,7 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
                             break
 
 
-                        if len(sources) > 10000 and m !=0:
+                        if len(sources) > 5000 and m !=0:
                             logger.warning('Picking up noise')
                             fudge_factor = syntax['fine_fudge_factor']
                             n = syntax['fine_fudge_factor']
@@ -204,14 +204,19 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
 
                         elif len(sources) > max_source_no:
                             logger.warning('Too many sources')
+                            print('m: %s :: n %s' % (m,n))
+                            if n==0:
+                                threshold_value *=2
 
-                            if m != 0 :
+                            elif m != 0 :
                                 decrease_increment = True
                                 n = syntax['fine_fudge_factor']
                                 fudge_factor = syntax['fine_fudge_factor']
                             else:
+                                # print('here')
                                 n = fudge_factor
-
+                                # print(n)
+#
                             continue
 
                         elif len(sources) < min_source_no:
@@ -422,8 +427,9 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
 
                             logger.info('Isolated sources found [ %.1f sigma ]: %d' % (threshold_value,len(isolated_sources)))
 
-                            sigma = np.nanmedian(isolated_sources['sigma'])
+                            sigma = np.nanmean(isolated_sources['sigma'])
                             mean_fwhm = gauss_fwhm(sigma)
+
 
                             syntax['scale'] = int(np.ceil(syntax['scale_multipler'] * mean_fwhm))
                         else:

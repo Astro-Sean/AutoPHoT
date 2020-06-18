@@ -51,6 +51,7 @@ def search(image, headinfo, target_coords, syntax, catalog_syntax, filter_):
     import os.path
     import logging
     from functools import reduce
+    import pandas as pd
 
     from astropy.table import Table
     from astropy.wcs import wcs
@@ -113,6 +114,27 @@ def search(image, headinfo, target_coords, syntax, catalog_syntax, filter_):
         if syntax['force_catalog_csv']:
             logger.info('Using '+syntax['force_catalog_csv_name']+' as catalog')
             fname = str(syntax['force_catalog_csv_name']) + '_r_' + str(radius)
+
+        # if syntax['catalog'] == 'custom':
+        #     dir_name = os.path.join(syntax['wdir'],'catalog_queries')
+        #     catalog_dir = syntax['catalog']
+        #     target = syntax['target_name']
+        #     target_dir =  dir_name + '/' + catalog_dir+'/'+target.lower()
+        #     fname = str(target) + '_RAD_' + str(float(syntax['radius']))
+        #     data =pd.read_csv(target_dir +'/'+ fname+'.csv')
+
+         #  If catalog set to cutsom
+        if syntax['catalog'] == 'custom':
+            target = syntax['target_name']
+            fname = str(target) + '_RAD_' + str(float(syntax['radius']))
+
+            if not syntax['catalog_custom_fpath']:
+                logger.critical('Custoim catalog selected but "catalog_custom_fpath" not defined')
+                exit()
+            else:
+                fname = syntax['catalog_custom_fpath']
+
+            data =pd.read_csv(fname)
 
         # if catalog is found via it's filename - use this and return data
         if os.path.isfile(os.path.join(target_dir,fname+'.csv')):

@@ -18,7 +18,9 @@ print(r"""
 
 """)
 
+import autophot
 
+print('AutoPhOT Version: %s' %autophot.__version__ )
 # Check user is running Python3 if not exit
 import sys
 if sys.version_info<(3,0,0):

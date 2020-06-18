@@ -13,28 +13,28 @@ build:
 
 requirements:
   build:
-    - python
+    - python 3.6.*
     - setuptools
   run:
-    - python >=3.6
-    - numpy >=1.18.1
-    - pandas >=1.0.3
-    - astropy >=4.0
+    - astroquery >=0.4
     - pyyaml >=5.3.1
     - lmfit >=1.0.0
-    - matplotlib
-    - astroquery >=0.4
+    - python >=3.6
     - astroscrappy >=1.0.8
+    - matplotlib
     - photutils >=0.7.2
-    - reproject >=0.7.1
+    - astropy >=4.0
+    - numpy >=1.18.1
+    - pandas >=1.0.3
+    - reproject
 
-test:
-  imports:
-    - autophot
+#test:
+#  imports:
+#    - autophot
 
 about:
   home: https://github.com/Astro-Sean/autophot
-  license: CCBY-SA4
+  license: ccbysa-4.0
   license_file: license
   description: Automated Photometry of Transients Photometric Pipeline
   summary: Preparing initial upload
