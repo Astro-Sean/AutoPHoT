@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=https://github.com/Astro-Sean/autophot/blob/master/logo.jpg width="40%">
+  <img src=https://github.com/Astro-Sean/autophot/blob/master/logo.jpg >
 </p>
 
 <div align="center">
