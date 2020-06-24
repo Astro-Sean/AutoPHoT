@@ -22,10 +22,11 @@ email: sean.brennan2@ucdconnect.ie [subject: github autophot]**
  * Colour terms still in testing/development and **not** in current build
  * Currently astrometry.net, HOTPANTS and astoalign needs to be installed by USER.
  * PSF selection will look for bright isolated sources, however this can lead to sources being selected near the image boundaries which can cause large errors, especially in IR bands. Future update with annulus selection procedure and spacial variant PSF.
+ * call_database can miss some filter information - user may need to rerun script a few times to complete all files in database, working on patch
 
 ## Installation
 
-**Some users reporting installation hanging during solving environment - currently looking into this - as always creating a fresh conda environment solves the issue**
+
 
 * Some packages require conda-forge in channel list:
 
