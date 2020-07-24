@@ -52,10 +52,15 @@ pip install astroalign
 ```
 
 * Code relies on [Astrometry.net](https://arxiv.org/abs/0910.2233) by Dustin Lang to solve for WCS. Code can be downloaded/installed [here](http://astrometry.net/doc/readme.html) and [here](http://astrometry.net/doc/build.html#build.).
-Once installed, locate the solve-field executable [default location: /usr/local/astrometry/bin/solve-field] and update (if needed) 'solve_field_exe_loc' in syntax (see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb)). **If the user trusts their WCS this step can be ignore as Astrometry.net is not used.**
+
+Once installed, locate the solve-field executable [default location: /usr/local/astrometry/bin/solve-field] and update (if needed) 'solve_field_exe_loc' in syntax (see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb)). 
+
+**If the user trusts their WCS this step can be ignore as Astrometry.net is not used.**
 
 
-* Image subtraction a local instance of [HOTPANTS](http://www.ascl.net/1504.004) by Andy Becker - HOTPANTS can be found [here](https://github.com/acbecker/). Once installed, locate the hotpants executable and update 'hotpants_exe_loc' in syntax see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb). **If the user has no need for image subtraction this step can be ignored.**
+* Image subtraction a local instance of [HOTPANTS](http://www.ascl.net/1504.004) by Andy Becker - HOTPANTS can be found [here](https://github.com/acbecker/). Once installed, locate the hotpants executable and update 'hotpants_exe_loc' in syntax see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb). 
+
+**If the user has no need for image subtraction this step can be ignored.**
 
 
 **Known error with installation of HOTPANTS**
@@ -86,7 +91,9 @@ to every .c file.
 
 ## Road map
 
-* Awaiting user feedback
+* Add function to output .tex file with photometry ready for publication
+* Introduce the use of standard fields
+* Color terms - building/accepting user color terms
 
 
 ## Testing
