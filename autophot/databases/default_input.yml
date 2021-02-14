@@ -24,7 +24,7 @@ AutoPhOT_input:
   reduce: False
 
   # Crop image built for wht r
-  crop_image: False
+  crop_image: True
 
   # Method for processing - serial [sp] or multi-processing [mp] (not working)
   method: sp
@@ -48,7 +48,7 @@ AutoPhOT_input:
   ignore_no_wcs: false
 
   # Ignore file if no telescope name given:
-  ignore_no_telescop: True
+  ignore_no_telescop: false
 
   # remove cosmic rays using astroscrappy
   remove_cmrays: true
@@ -163,19 +163,53 @@ AutoPhOT_input:
   int_scale: 25
 
   # Multiplier to set close up cutout size based on image scaling
-  scale_multipler: 3
+  scale_multipler: 8
+
+  #=====================================
+  # Comsic Ray removal
+  #=====================================
+  use_astroscrappy: True
+  use_lacosmic: False
+
+  #=====================================
+  # Function fitting
+  #=====================================
+
+  use_local_stars_for_PSF: False
+  use_local_stars: False
+  use_source_arcmin: 1
+
+  use_moffat: False
+  default_moff_beta: 4.765
+  vary_moff_beta: False
+  check_nyquist: False
+  nyquist_limit: 2
+  use_astroalign: False
+  use_reproject_interp: True
+  apply_airmass_extinction : False
+  plot_airmass: True
+  psf_bkg_surface: True
+  psf_bkg_local: False
+  psf_bkg_poly: False
+  psf_bkg_poly_degree: 1
+  fit_PSF_FWHM: False
+  trim_edges: False
+  trim_edges_pixels: 1500
 
   #=====================================
   # Source Detection
   #=====================================
 
-  # Source Detection  initial threshold value, will iterate through - quite buggy - for good images 10 should be grand
+  # Source Detection  initial threshold value, will iterate through - quite buggy - for good images 100 should be grand
+
   threshold_value: 100
-  #some values use in iteration to find good sources, leave alone
+
   fudge_factor: 5
   fine_fudge_factor: 0.2
+
   isolate_sources: True
   iso_scale: 10
+
   clip_sigma: true
   sigma_sigma_clip: 1
   median_sigma_clip: 1
@@ -186,18 +220,36 @@ AutoPhOT_input:
   fwhm_iters: 3
 
   # remove saturated sources
-  remove_sat: False
+  remove_sat: True
 
   #ignore any sources within pix_bound from edge
   remove_boundary_sources: true
-  pix_bound: 10
+  pix_bound: 25
+
+  trim_edges: False
+  trim_edges_pixels: 25
 
   # min and max allow sources when doing source detection to find fwhm
   min_source_lim: 2
   max_source_lim: 500
+  source_max_iter: 30
 
-  source_max_iter: 60
 
+  plots_PSF_sources: False
+  plots_PSF_residual: False
+  show_residuals: False
+
+  ap_corr_plot: False
+  force_lmag: False
+
+  update_wcs_scale: False
+  probable_detection_limit: False
+  probable_detection_limt_beta: 0.95
+
+  save_subtraction_quicklook: True
+  adjust_SN_loc: True
+
+  do_ap_on_sub: True
   #====================================
   # Source Detection
   #=====================================
@@ -218,7 +270,7 @@ AutoPhOT_input:
   match_dist: 5
 
   # close up threshold level for source detection
-  bkg_level: 3
+  bkg_level: 5
 
   iso_cat: true
 
@@ -227,11 +279,7 @@ AutoPhOT_input:
   # show a plot of sources not detected
   show_non_detections: false
 
-  # use median for background level when getting prelim photometry
-  ap_phot_bkg_local: true
 
-  # fit low poly surface to estimate background
-  ap_phot_bkg_surface: false
 
   #====================================
   # Photometry
@@ -242,15 +290,15 @@ AutoPhOT_input:
   do_psf_phot: True
   do_ap_phot: False
 
-  psf_bkg_surface: False
+  psf_bkg_surface: True
   psf_bkg_local: False
-  psf_bkg_poly: True
+  psf_bkg_poly: False
   psf_bkg_poly_degree: 1
 
   apply_ct_zerpoint: False
 
-  catalog_matching_dx: 15
-  catalog_matching_dy: 15
+  catalog_matching_dx: 7.5
+  catalog_matching_dy: 7.5
 
   max_catalog_sources: 250
 
@@ -266,29 +314,25 @@ AutoPhOT_input:
   # Aperture Correction
   #=====================================
 
-  # aperture size = ap_size * fwhm
-  ap_size: 1.3
-
-  # no idea
-  aperture_multiplier: 3
+  # aperture radius = ap_size * fwhm
+  ap_size: 1.5
 
   #larger ap size for aperture corrections
-
   inf_ap_size: 2.5 # cannot be larger than scale_multipler
 
   # sigma clip aperture corrections
-  ap_corr_sigma: 1
+  ap_corr_sigma: 3
 
   # innular and outer annulus for background estimate
-  r_in_size: 2
-  r_out_size: 3.5
+  r_in_size: 2.0
+  r_out_size: 2.75
 
   #=====================================
   # PSF fitting
   #=====================================
 
   # Number of sources used in psf (if available)
-  psf_source_no: 10
+  psf_source_no: 12
 
   # worst cause scenario use this many psf sources
   min_psf_source_no: 3
@@ -301,15 +345,15 @@ AutoPhOT_input:
   # show residual and shift from building psf
   r_table_shift_check: False
 
-  # regrid value for building psf -  value of 4 is grand
+  # regrid value for building psf -  value of 6 is fine
   regrid_size: 8
 
   # only use sources if their SNR is greater than this values
-  construction_SNR: 100
+  construction_SNR: 25
 
   # Psf pixel limit - amount psf can move around from source location
-  dx: 7
-  dy: 7
+  dx: 1.5
+  dy: 1.5
 
   # error estimate of psf fit from covariance matrix
   use_confinterval: false #<- broken
@@ -321,23 +365,27 @@ AutoPhOT_input:
 
   # location of solve-field from astromety.net
   solve_field_exe_loc: None
-  offset_param: 10.0         # mean pixel distance criteria between trusting original WCS and looking it up
-  search_radius: 1.0
+  offset_param: 5.        # mean pixel distance criteria between trusting original WCS and looking it up
+  search_radius: 0.5
 
   guess_scale: False
   downsample: 2
-  solve_field_timeout: 30 #seconds
+  solve_field_timeout: 45 #seconds
 
   # update telescope.yml from output of astrometry.net
   update_wcs_scale: True
 
-  allow_recheck: True
+  # allow recheck of wcs if pixel offset from sources is too great
+  allow_recheck: False
 
   #=====================================
   # HOTPANTS
   #=====================================
 
+  # Set by user
   hotpants_exe_loc: None
+
+  # Timeout for template subtraction
   hotpants_timeout: 300 #seconds
 
   #=====================================
@@ -366,7 +414,31 @@ AutoPhOT_input:
   # Mutiple of fwhm to insert test sources
   test_site_size: 3
 
-  dmag: 0.5
+  # fill in to insert source with artifical mag or leave black to use mag from AutoPhOT
+  inject_source_mag:
+
+  # place fake source on save_target_plot
+  inject_source_on_target: False
+
+  # place source randomly
+  inject_source_random: True
+
+  inject_sources_random_number: 5
+
+  # recover injected sources:
+  inject_source_recover: False
+
+  # Add possoin noise to injected source
+  inject_source_add_noise: False
+
+  inject_source_recover_dmag: 0.25
+
+  inject_source_recover_dmag_redo: 10
+
+  inject_source_recover_nsteps: 75
+
+
+
   #=====================================
   # Graphing
   #=====================================

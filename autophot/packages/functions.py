@@ -1,3 +1,49 @@
+'''
+Script with all the function used throughout AutoPHoT
+'''
+
+
+import numpy as np
+from scipy.optimize import least_squares
+
+
+
+def set_size(width,aspect=1,fraction=1):
+        """ Set aesthetic figure dimensions to avoid scaling in latex.
+
+        Parameters
+        ----------
+        width: float
+                Width in pts
+        fraction: float
+                Fraction of the width which you wish the figure to occupy
+        aspect: Float
+                height multiple of width
+
+        Returns
+        -------
+        fig_dim: tuple
+                Dimensions of figure in inches
+        """
+        # Width of figure
+        fig_width_pt = width * fraction
+
+        # Convert from pt to inches
+        inches_per_pt = 1 / 72.27
+
+        # Golden ratio to set aesthetic figure height
+        golden_ratio = (5**.5 - 1) / 2
+
+        # Figure width in inches
+        fig_width_in = fig_width_pt * inches_per_pt
+        # Figure height in inches
+        fig_height_in = fig_width_in * golden_ratio
+
+        fig_dim = (fig_width_in, fig_height_in * aspect)
+
+        return fig_dim
+
+
 def getheader(fpath):
 
     '''
@@ -48,16 +94,29 @@ def getheader(fpath):
     return headinfo
 
 
-'''
-Function to find image for fileptha
+def order_shift(x):
 
-'''
+    import numpy as np
+    idx = (np.isnan(x)) | (np.isinf(x)) | (x<=0)
+
+    return 10**np.nanmax(np.floor(np.log10(x[~idx])))
+
+
+
 def getimage(fpath):
 
-    from astropy.io import fits
+    '''
+    Function to find image for filepath
+    '''
 
+    from astropy.io import fits
     try:
-        image = fits.getdata(fpath,'sci','i')
+
+        try:
+            image = fits.getdata(fpath,'sci')
+        except:
+            image = fits.getdata(fpath)
+
     except:
         with fits.open(fpath,ignore_missing_end=True) as hdul:
             hdul.verify('silentfix+ignore')
@@ -69,6 +128,20 @@ def getimage(fpath):
 
     return image
 
+def beta_value(n,sigma,f_ul,mean = 0):
+
+    '''
+    detection probability from
+    http://web.ipac.caltech.edu/staff/fmasci/home/mystats/UpperLimits_FM2011.pdf
+    '''
+    from scipy.special import erf
+    from numpy import sqrt
+
+    z = (mean +( n*sigma) - f_ul)/(sqrt(2)*sigma)
+
+    beta = 0.5 *(1-erf(z))
+
+    return beta
 
 def zeropoint(mag, counts, ct_gradient = None, dmag = None, airmass = None):
 
@@ -77,6 +150,7 @@ def zeropoint(mag, counts, ct_gradient = None, dmag = None, airmass = None):
 
         mag = -2.5 * log10 (counts) + ct(dmag) + zp + airmass
     """
+
     import numpy as np
 
     zp_list = [mag]
@@ -98,76 +172,139 @@ def zeropoint(mag, counts, ct_gradient = None, dmag = None, airmass = None):
 
 def mag(counts, zp,ct_gradient = False,dmag = False,airmass = None):
 
+    '''
+    Calculate zeropint using:
+
+    mag = - 2.5 * log10 (counts) + ct(dmag) + zp + airmass
+
+    if negative counts code will return nan for
+
+    '''
+
     try:
-        """
-        Calculate zeropint using:
 
-            mag = - 2.5 * log10 (counts) + ct(dmag) + zp + airmass
-        """
+       import numpy as np
+       import sys
+       import os
 
-        import numpy as np
-        import sys
-        import os
+       # Iitial list with zeropoint
+       if isinstance(counts,float):
+           counts = [counts]
 
-
-#        try:
-#            counts = np.array(counts)
-#    #        counts[np.isnan(counts)] = -1
-#    #        counts[counts<0] = np.nan
-#        except:
-#            pass
-
-        # Iitial list with zeropoint
-        if isinstance(counts,float):
-            counts = [counts]
-
-        mag_inst = np.array([-2.5*np.log10(c)+zp if c > 0.1 else 0. for c in counts ])
+       mag_inst = np.array([-2.5*np.log10(c)+zp if c > 0.0 else np.nan for c in counts ])
 
 
     except Exception as e:
-        exc_type, exc_obj, exc_tb = sys.exc_info()
-        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-        print(exc_type, fname, exc_tb.tb_lineno,e)
+       exc_type, exc_obj, exc_tb = sys.exc_info()
+       fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+       print(exc_type, fname, exc_tb.tb_lineno,e)
 
     return mag_inst
 
-def gauss_fwhm(sigma):
+
+
+'''
+Gaussian Function
+'''
+def gauss_sigma2fwhm(image_params):
+
+
+   sigma = image_params['sigma']
+
    import numpy as np
+
    fwhm = 2*np.sqrt(2*np.log(2)) * sigma
+
    return fwhm
 
-def moffat_fwhm(gamma, beta):
+
+def gauss_fwhm2sigma(fwhm,image_params = None):
+
    import numpy as np
-   x = np.sqrt((2**(1/beta))-1)
-   y = 2*gamma*x
-   return y
+
+   sigma= fwhm / (2*np.sqrt(2*np.log(2)))
+
+   return sigma
+
+
+def gauss_2d(image, x0,y0, sky , A, image_params):
+
+    sigma = image_params['sigma']
+    from numpy import exp
+
+    (x,y) = image
+
+    a = (x-x0)**2
+
+    b = (y-y0)**2
+
+    c = (2*sigma**2)
+
+    d =  A*abs(exp( -(a+b)/c))
+
+    e =  d + sky
+
+    return  e.ravel()
+
+
+'''
+Moffat Profile
+'''
+
+def moffat_fwhm(image_params):
+
+   alpha = image_params['alpha']
+   beta = image_params['beta']
+
+   from numpy import sqrt
+
+   fwhm  = 2 * alpha *  sqrt((2**(1/beta))-1)
+
+   return fwhm
+
+
+def moffat_2d(image, x0,y0, sky , A, image_params):
+
+    # https://www.ltam.lu/physique/astronomy/projects/star_prof/star_prof.html
+
+    (x,y) = image
+
+    alpha = image_params['alpha']
+    beta = image_params['beta']
+
+    a = (x-x0)**2
+
+    b = (y-y0)**2
+
+    c = (a+b)/(alpha**2)
+
+    d = (1+c) ** -beta
+
+    e = (A*d)+sky
+
+    return e.ravel()
+
+
+
+
+
+
+
+
+
+
 
 def pix_dist(x1,x2,y1,y2):
     import numpy as np
+
+
     z1 = (x1-x2)**2
     z2 = (y1-y2)**2
-    z3 = np.sqrt(z1+z2)
-    return z3
-
-def gauss_2d(image, x0,y0, sky , A, sigma):
-    import numpy as np
-    (x,y) = image
-    a = (x-x0)**2
-    b = (y-y0)**2
-    c = (2*sigma**2)
-    d =  A*abs(np.exp( -(a+b)/c))
-    e =  d + sky
-    return  e.ravel()
-
-def r_dist(x1,x2,y1,y2) :
-    import numpy as np
-
-    a = (x1-x2)**2
-    b = (y1-y2)**2
-
-    r = np.sqrt(a+b)
+    r = np.sqrt(z1+z2)
 
     return np.array(r)
+
+
 
 def weighted_avg_and_std(values, weights):
     import numpy as np
@@ -218,4 +355,68 @@ def weighted_median(data, weights):
     return w_median
 
 
+
+
+def pixel_correction(x,m):
+
+    from numpy import ceil, floor
+
+    diff =  x - int(x)
+
+    if diff/m >= 0.5 or  diff ==0:
+        return ceil(x) - 0.5
+
+    elif diff/m < 0.5:
+        return floor(x)
+
+# Whatever pixel (0,0 TL),coordinate on the image to the corrosponding corrdinate in center of pixel
+def array_correction(x):
+    from numpy import ceil, floor
+
+    diff =  float(x) % 1
+
+    if diff > 0.5:
+
+        return int(ceil(x))
+
+    elif diff <= 0.5:
+
+        return int(floor(x))
+
+def norm(array):
+
+    from numpy import nanmin as np_min
+    from numpy import nanmax as np_max
+
+    norm_array = (array - np_min(array))/(np_max(array)-np_min(array))
+
+
+    return norm_array
+
+def renorm(array,lb,up):
+    s = up - lb
+    n =  (array - np.min(array))/(np.nanmax(array)-np.min(array))
+    m = (s * n) + lb
+    return m
+
+def find_2d_int_percent(count_percent,fwhm):
+
+    from scipy.integrate import dblquad
+    sigma = fwhm/(2*np.sqrt(2*np.log(2)))
+
+    A = 1 / (2 * np.pi * sigma **2)
+    gauss = lambda y,x: A * np.exp( -1 * (((y)**2+(x)**2)/(2*sigma**2)))
+    fit = lambda x0: (count_percent - dblquad(gauss, -1*x0,x0,lambda x: -1*x0,lambda x: x0)[0])
+
+    r = least_squares(fit,x0 = 3)
+    return r.x[0]
+
+
+def scale_roll(x,xc,m):
+    dx = (x - xc)
+    if m !=1:
+        shift = int(round(dx *m))
+    else:
+        shift = int(dx *m)
+    return shift
 

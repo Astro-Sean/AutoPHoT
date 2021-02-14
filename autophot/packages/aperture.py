@@ -21,7 +21,6 @@ def ap_phot(positions,data, radius ,r_in = None,r_out= None):
         annulus_apertures = CircularAnnulus(positions, r_in=r_in, r_out=r_out)
         annulus_masks = annulus_apertures.to_mask(method='center')
 
-#        print(positions)
         if r_out >= data.shape[0] or r_out > data.shape[1]:
             print('Error - Apphot - Annulus size greater than image size')
 
@@ -71,6 +70,8 @@ def ap_phot(positions,data, radius ,r_in = None,r_out= None):
             exc_type, exc_obj, exc_tb = sys.exc_info()
             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
             print(exc_type, fname, exc_tb.tb_lineno,e)
+
+
 
     return aperture_sum,bkg_sum
 

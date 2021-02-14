@@ -6,32 +6,6 @@ Created on Fri Nov 16 14:13:14 2018
 @author: seanbrennan
 """
 
-
-def gauss_2d(image, sky , A , x0 , y0 ,sigma):
-
-       import numpy as np
-       (x,y) = image
-       a = (x-x0)**2
-       b = (y-y0)**2
-       c = (2*sigma**2)
-       d =  A*np.exp( -(a+b)/c)
-       e =  d + sky
-       return  e.ravel()
-
-def igen(a, n, m):
-    from itertools import product
-    import numpy as np
-    i_ = np.arange(a.shape[0]) // n
-    j_ = np.arange(a.shape[1]) // m
-    for i, j in product(np.unique(i_), np.unique(j_)):
-        yield (i, j), a[i_ == i][:, j_ == j]
-
-def norm(array):
-    import numpy as np
-    norm_array = array/(np.nanmax(array))
-    return norm_array
-
-
 def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
 
 
@@ -46,16 +20,23 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
 
     from astropy.stats import sigma_clipped_stats
     from photutils.detection import DAOStarFinder
-    from autophot.packages.functions import gauss_fwhm,gauss_2d
+    from autophot.packages.functions import gauss_sigma2fwhm,gauss_2d,gauss_fwhm2sigma
+
+    from autophot.packages.functions import moffat_2d,moffat_fwhm
     import numpy as np
     import pandas as pd
-    import sys,os
     import lmfit
     from astropy.stats import sigma_clip
     import logging
 
     logger = logging.getLogger(__name__)
 
+    def combine(dictionaries):
+        combined_dict = {}
+        for dictionary in dictionaries:
+            for key, value in dictionary.items():
+                combined_dict.setdefault(key, []).append(value)
+        return combined_dict
 
     if sigma_lvl != None:
         min_source_no  = 0
@@ -73,12 +54,27 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
             int_fwhm = fwhm
 
         else:
-
             int_fwhm = syntax['fwhm_guess']
 
     if fwhm != None:
         syntax['int_scale'] = syntax['scale']
+        int_fwhm = syntax['fwhm']
 
+    if syntax['use_moffat']:
+        logging.info('Using Moffat Profile for fitting')
+
+        fitting_model = moffat_2d
+        fitting_model_fwhm = moffat_fwhm
+
+    else:
+        logging.info('Using Gaussian Profile for fitting')
+
+        fitting_model = gauss_2d
+        fitting_model_fwhm = gauss_sigma2fwhm
+
+
+
+    image_params = []
     isolated_sources = []
 
     img_seg = [0]
@@ -109,17 +105,22 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
             # How much to drop/increase each iteration each
             fudge_factor = syntax['fudge_factor']
 
-            bkg_detect_check=[]
-
             search_image = image.copy()
+
+
 
             # Remove target by masking with area with that of median image value - just so it's not picked up
             if syntax['target_name'] != None and fwhm == None:
 
                 logger.info('Target location : (x,y) -> (%.3f,%.3f)' % (syntax['target_x_pix'] , syntax['target_y_pix']))
 
-                search_image[int(syntax['target_y_pix'])-syntax['int_scale']: int(syntax['target_y_pix']) + syntax['int_scale'],
-                             int(syntax['target_x_pix'])-syntax['int_scale']: int(syntax['target_x_pix']) + syntax['int_scale']] =  syntax['global_median'] * np.ones((int(2*syntax['int_scale']),int(2*syntax['int_scale'])))
+                if abs(syntax['target_x_pix'])>=search_image.shape[1] or abs(syntax['target_y_pix'])>=search_image.shape[0]:
+                    logger.warning('Target not located on images')
+                    raise Exception ( ' *** EXITING - Target pixel coordinates outside of image [%s , %s] *** ' % (int(syntax['target_y_pix']), int(syntax['target_y_pix'])))
+
+                else:
+                    search_image[int(syntax['target_y_pix'])-syntax['int_scale']: int(syntax['target_y_pix']) + syntax['int_scale'],
+                                 int(syntax['target_x_pix'])-syntax['int_scale']: int(syntax['target_x_pix']) + syntax['int_scale']] =  syntax['global_median'] * np.ones((int(2*syntax['int_scale']),int(2*syntax['int_scale'])))
 
 
             while True:
@@ -141,8 +142,8 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
                                 # revert privious decrease
                                 decrease_increment = True
                                 n=syntax['fine_fudge_factor']
-                                # m = 0 to stop any further decrease
 
+                                # m = 0 to stop any further decrease
                                 threshold_value += m
                                 m = 0
 
@@ -150,12 +151,9 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
 
                             threshold_value = round(threshold_value + n - m,3)
 
-                        # if threshold goes negative usesmaller fudge factor
+                        # if threshold goes negative use smaller fudge factor
                         if decrease_increment:
                             fudge_factor = syntax['fine_fudge_factor']
-
-
-
 
                         daofind = DAOStarFinder(fwhm      = np.ceil(int_fwhm),
                                                 threshold = threshold_value*std,
@@ -174,17 +172,11 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
 
                         logger.info('Number of sources before cleaning - [s = %.1f]: %d ' % (threshold_value,len(sources)))
 
-                        # f_x = len(sources) / (threshold_value*std)
-
-                        # relative_change = f_x - np.nanmedian(f_x) / np.nanmedian(f_x)
-
                         if len(sources) == 0:
                             logger.warning('No sources')
                             m = fudge_factor
-
                             continue
 
-                        # bkg_detect_check.append(relative_change)
 
                         try:
                             sources['xcentroid']
@@ -194,17 +186,9 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
                             break
 
 
-                        if len(sources) > 5000 and m !=0:
-                            logger.warning('Picking up noise')
-                            fudge_factor = syntax['fine_fudge_factor']
-                            n = syntax['fine_fudge_factor']
-                            m = 0
-                            decrease_increment = True
-                            continue
-
-                        elif len(sources) > max_source_no:
+                        if len(sources) > max_source_no:
                             logger.warning('Too many sources')
-                            print('m: %s :: n %s' % (m,n))
+                            # print('m: %s :: n %s' % (m,n))
                             if n==0:
                                 threshold_value *=2
 
@@ -213,11 +197,18 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
                                 n = syntax['fine_fudge_factor']
                                 fudge_factor = syntax['fine_fudge_factor']
                             else:
-                                # print('here')
                                 n = fudge_factor
-                                # print(n)
-#
                             continue
+
+                        elif len(sources) > 5000 and m !=0:
+                            logger.warning('Picking up noise')
+                            fudge_factor = syntax['fine_fudge_factor']
+                            n = syntax['fine_fudge_factor']
+                            m = 0
+                            decrease_increment = True
+                            continue
+
+
 
                         elif len(sources) < min_source_no:
                             logger.warning('Too few sources')
@@ -270,6 +261,7 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
                                     dist = dist[np.where(dist!=0)]
 
                                     isolated_dist = 0
+
                                     if syntax['isolate_sources']:
 
                                         isolated_dist = syntax['iso_scale']
@@ -302,7 +294,7 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
                         x_rc = []
                         y_rc = []
 
-                        sigma=[]
+                        fwhm_list=[]
                         medianlst=[]
 
                         x_pix = np.arange(0,2 * syntax['int_scale'])
@@ -318,11 +310,11 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
                                 x0 = isolated_sources['x_pix'].loc[[idx]]
                                 y0 = isolated_sources['y_pix'].loc[[idx]]
 
-                                close_up = image_copy[int(y0)- syntax['int_scale']: int(y0) + syntax['int_scale'],
-                                                      int(x0)- syntax['int_scale']: int(x0) + syntax['int_scale']]
+                                close_up = image_copy[int(y0 - syntax['int_scale']): int(y0 + syntax['int_scale']),
+                                                      int(x0 - syntax['int_scale']): int(x0 + syntax['int_scale'])]
 
                                 if close_up.shape != (int(2*syntax['int_scale']),int(2*syntax['int_scale'])):
-                                    sigma.append(np.nan)
+                                    fwhm_list.append(np.nan)
                                     x_rc.append(np.nan)
                                     y_rc.append(np.nan)
                                     medianlst.append(np.nan)
@@ -342,41 +334,80 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
                                     except:
                                         saturation_lvl = 2**16
 
-                                    if np.nanmax(close_up) >= saturation_lvl:
-                                        sigma.append(np.nan)
-                                        x_rc.append(np.nan)
-                                        y_rc.append(np.nan)
-                                        continue
+                                    # if np.nanmax(close_up) >= saturation_lvl:
+                                    #     print('Saturated image')
+                                    #     fwhm_list.append(np.nan)
+                                    #     x_rc.append(np.nan)
+                                    #     y_rc.append(np.nan)
+                                    #     continue
 
 
                                 try:
 
                                      pars = lmfit.Parameters()
                                      pars.add('A',value = np.nanmax(close_up),min = 0)
-                                     pars.add('x0',value = close_up.shape[0]/2)
-                                     pars.add('y0',value = close_up.shape[0]/2)
-                                     pars.add('sigma',value = 3,max = syntax['max_fit_fwhm'] / 2*np.sqrt(2*np.log(2)) )
+                                     pars.add('x0',value = close_up.shape[0]/2,min = 0,max = close_up.shape[1])
+                                     pars.add('y0',value = close_up.shape[0]/2,min = 0,max = close_up.shape[0])
                                      pars.add('sky',value = np.nanmedian(close_up))
 
-                                     def residual(p):
-                                         p = p.valuesdict()
-                                         return (close_up - gauss_2d((xx,yy),p['x0'],p['y0'],p['sky'],p['A'],p['sigma']).reshape(close_up.shape)).flatten()
+                                     if syntax['use_moffat']:
+                                         pars.add('alpha',value = 3,min = 0,max = 30)
+                                         pars.add('beta',value = syntax['default_moff_beta'],
+                                                  min = 0,
+                                                  vary = syntax['vary_moff_beta']  )
+
+                                     else:
+                                         pars.add('sigma',value = 3,
+                                                  min = 0,
+                                                  max = gauss_fwhm2sigma(syntax['max_fit_fwhm']) )
+
+                                     if syntax['use_moffat']:
+                                         def residual(p):
+                                             p = p.valuesdict()
+                                             return (close_up - moffat_2d((xx,yy),p['x0'],p['y0'],p['sky'],p['A'],dict(alpha=p['alpha'],beta=p['beta'])).reshape(close_up.shape)).flatten()
+                                     else:
+                                         def residual(p):
+                                             p = p.valuesdict()
+                                             return (close_up - gauss_2d((xx,yy),p['x0'],p['y0'],p['sky'],p['A'],dict(sigma=p['sigma'])).reshape(close_up.shape)).flatten()
 
                                      mini = lmfit.Minimizer(residual, pars,nan_policy = 'omit')
                                      result = mini.minimize(method = 'least_squares')
 
-                                     sigma_fit = abs(result.params['sigma'].value)
 
-                                     sigma.append(sigma_fit)
+
+                                     if syntax['use_moffat']:
+                                         source_image_params = dict(alpha=result.params['alpha'].value,beta=result.params['beta'].value)
+                                     else:
+                                         source_image_params = dict(sigma=result.params['sigma'])
+
+
+                                     fwhm_fit = fitting_model_fwhm(source_image_params)
+
+                                     image_params.append(source_image_params)
+
+                                     fwhm_list.append(fwhm_fit)
 
                                      x_rc.append(result.params['x0'] - syntax['int_scale'] + x0)
                                      y_rc.append(result.params['y0'] - syntax['int_scale'] + y0)
 
 
+                                     if syntax['remove_sat']:
+
+                                        if result.params['A'].value >= syntax['sat_lvl']:
+                                            print('-Saturated source')
+                                            fwhm_list.append(np.nan)
+                                            x_rc.append(np.nan)
+                                            y_rc.append(np.nan)
+                                            pass
+
+
+
+
+
                                 except Exception as e:
                                     logger.exception(e)
 
-                                    sigma.append(np.nan)
+                                    fwhm_list.append(np.nan)
                                     x_rc.append(np.nan)
                                     y_rc.append(np.nan)
 
@@ -385,25 +416,26 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
                             except Exception as e:
                                 logger.exception(e)
 
-                                sigma.append(np.nan)
+                                fwhm_list.append(np.nan)
                                 x_rc.append(np.nan)
                                 y_rc.append(np.nan)
                                 medianlst.append(median_val)
 
                                 continue
-
+                        isolated_sources['FWHM'] = pd.Series(fwhm_list)
+                        isolated_sources['median'] = pd.Series(medianlst)
                         if sigma_lvl == None:
-                            isolated_sources['sigma'] = pd.Series(sigma)
-                            isolated_sources['median'] = pd.Series(medianlst)
 
 
-                            if isolated_sources['sigma'].values == np.array([]):
+
+                            if isolated_sources['FWHM'].values == np.array([]):
                                 logger.info('> No sigma values taken <')
                                 continue
                             try:
 
-                                if len(isolated_sources) > 30:
-                                    isolate_mask = sigma_clip(isolated_sources['sigma'].values, sigma=1.5).mask
+                                if len(isolated_sources) > 5:
+
+                                    isolate_mask = sigma_clip(isolated_sources['FWHM'].values, sigma=3).mask
 
                                     isolated_sources = isolated_sources[~isolate_mask]
 
@@ -420,20 +452,26 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
                                     fudge_factor = syntax['fine_fudge_factor']
                                 else:
                                     n = fudge_factor
-                                # m = fudge_factor
+
                                 m=0
-                                # n = fudge_factor
+
                                 continue
 
-                            logger.info('Isolated sources found [ %.1f sigma ]: %d' % (threshold_value,len(isolated_sources)))
+                            logger.info('Isolated sources found [ %d sigma ]: %d' % (threshold_value,len(isolated_sources)))
 
-                            sigma = np.nanmean(isolated_sources['sigma'])
-                            mean_fwhm = gauss_fwhm(sigma)
+                            mean_fwhm =  np.nanmean(isolated_sources['FWHM'])
 
 
-                            syntax['scale'] = int(np.ceil(syntax['scale_multipler'] * mean_fwhm))
+
+                            if np.isnan(mean_fwhm):
+                                m = fudge_factor
+                                continue
+
+
                         else:
-                            isolated_sources['sigma'] = pd.Series(sigma)
+                            isolate_mask = sigma_clip(isolated_sources['FWHM'].values, sigma=3).mask
+
+                            isolated_sources = isolated_sources[~isolate_mask]
                             mean_fwhm = fwhm
 
                         break
@@ -441,6 +479,26 @@ def fwhm(image,syntax,sigma_lvl = None,fwhm = None):
                     except Exception as e:
                         logger.exception(e)
                         continue
+
+        image_params_combine = combine(image_params)
+        image_params_out={}
+        for key,val in image_params_combine.items():
+            val = np.array(val)
+
+
+            mask = np.array(sigma_clip(val, sigma=3).mask)
+            # print(mask)
+
+            image_params_out[key] = np.nanmean(val[~mask])
+            image_params_out[key+'_err'] = np.nanstd(val[~mask])
+
+        syntax['image_params'] =image_params_out
+
+        mean_fwhm = fitting_model_fwhm(image_params_out)
+
+        syntax['scale'] = int(np.ceil(syntax['scale_multipler'] * mean_fwhm)) + 0.5
+
+
 
         return mean_fwhm,isolated_sources,syntax
 
@@ -528,14 +586,17 @@ def phot(image,syntax,df,fwhm,LOG=None,):
 
         positions  = list(zip(np.array(df['x_pix']),np.array(df['y_pix'])))
 
+
+
         for key,val in ap_dict.items():
 
             try:
 
                 ap , bkg = ap_phot(positions,image,
                                    radius = val,
-                                   r_in = syntax['r_in_size']   * fwhm,
-                                   r_out = syntax['r_out_size'] * fwhm)
+                                   r_in = val + syntax['r_in_size']   * fwhm,
+                                   r_out = val + syntax['r_out_size'] * fwhm
+                                   )
 
                 df['flux_'+str(key)] = ap
 
@@ -548,6 +609,7 @@ def phot(image,syntax,df,fwhm,LOG=None,):
                 pass
 
         df['mag_inst'] = mag(df.flux_ap/syntax['exp_time'],0)
+
         if syntax['save_dataframe']:
             df.to_csv(str(syntax['fname_dataframe']) + '.csv')
     except Exception as e:
@@ -567,8 +629,12 @@ def ap_correction(image,syntax,df):
     from astropy.stats import sigma_clip
     import matplotlib.pyplot as plt
     from autophot.packages.functions import mag
+    from autophot.packages.functions import set_size
+
     import logging
     logger = logging.getLogger(__name__)
+
+    plt.ioff()
 
 
     ap_diff = mag(df['flux_inf_ap'] / df['flux_ap'],0)
@@ -580,22 +646,30 @@ def ap_correction(image,syntax,df):
 
     if syntax['ap_corr_plot']:
 
-        fig = plt.figure(figsize = (10,6))
-        fig.suptitle('Aperture Corrections')
+        fig = plt.figure(figsize = set_size(240,1))
 
-        ax1 = plt.add_subplot(121)
-        ax1.hist(ap_diff,bins = 'auto',label = 'Before Cliiping')
-        ax2 = plt.add_subplot(122)
-        ax2.hist(ap_corr,bins = 'auto',label = 'After Cliiping')
 
-        ax1.set_xlabel('Aperture Correction magnitude')
-        ax1.set_ylabel('Occurence')
-        ax1.legend(loc = 'best')
+        ax1 = fig.add_subplot(111)
+        ax1.hist([ap_diff,ap_corr],
+                 weights = [ np.ones_like(ap_diff)/float(len(ap_diff)),np.ones_like(ap_corr)/float(len(ap_corr))],
+                 bins = 30,
+                 label = ['w/o Clipping','w/ Clipping [$%d\sigma$]' % syntax['ap_corr_sigma']],
+                 density = False)
 
-        ax2.set_xlabel('Aperture Correction magnitude')
-        ax2.set_ylabel('Occurence')
-        ax2.legend(loc = 'best')
-        plt.show()
+        # ax1.hist(ap_corr,bins = 'auto',label = ,density = True)
+
+        ax1.set_xlabel(r'$-2.5 log_{10}(\frac{\sum Infinite \ Aperture}{\sum Aperture})$')
+        ax1.set_ylabel('Probability')
+        ax1.legend(loc = 'best',
+                   frameon = False)
+
+        fig.savefig(syntax['write_dir']+'APCOR.pdf',
+                                                    format = 'pdf',
+                                                    bbox_inches='tight'
+                                                    )
+        plt.close()
+
+        # plt.show()
 
 
     logger.info('Aperture correction: %.3f +/- %.3f' % (np.nanmean(ap_corr),np.nanstd(ap_corr)))

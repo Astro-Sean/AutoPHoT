@@ -52,6 +52,9 @@ def search(image, headinfo, target_coords, syntax, catalog_syntax, filter_):
     import logging
     from functools import reduce
     import pandas as pd
+    from autophot.packages.functions import gauss_sigma2fwhm,gauss_2d,gauss_fwhm2sigma
+
+    from autophot.packages.functions import moffat_2d,moffat_fwhm
 
     from astropy.table import Table
     from astropy.wcs import wcs
@@ -59,7 +62,7 @@ def search(image, headinfo, target_coords, syntax, catalog_syntax, filter_):
     from astropy.io.votable import parse_single_table
     from astropy.coordinates import Angle
 
-    from autophot.packages.functions import r_dist
+    # from autophot.packages.functions import pix_dist
     logger = logging.getLogger(__name__)
 
     try:
@@ -167,7 +170,7 @@ def search(image, headinfo, target_coords, syntax, catalog_syntax, filter_):
 
                 warnings.filterwarnings('default')
 
-            if syntax['catalog'] in ['apass','2mass']:
+            if syntax['catalog'] in ['apass','2mass','sdss']:
 
                 # No row limit
                 Vizier.ROW_LIMIT = -1
@@ -292,16 +295,18 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
     import numpy as np
     import matplotlib.pyplot as plt
 
-    import os,sys
     import pandas as pd
     import lmfit
+    from autophot.packages.functions import gauss_sigma2fwhm,gauss_2d,gauss_fwhm2sigma
 
+    from autophot.packages.functions import moffat_2d,moffat_fwhm
     from astropy.stats import sigma_clipped_stats
     from photutils import DAOStarFinder
 
-    from autophot.packages.functions import r_dist,gauss_2d
+    from autophot.packages.functions import pix_dist,gauss_2d
 
     import logging
+    from astropy.stats import sigma_clipped_stats
 
     logger = logging.getLogger(__name__)
 
@@ -339,6 +344,18 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
 
     useable_sources = 0
 
+    if syntax['use_moffat']:
+        logging.info('Using Moffat Profile for fitting')
+
+        fitting_model = moffat_2d
+        fitting_model_fwhm = moffat_fwhm
+
+    else:
+        logging.info('Using Gaussian Profile for fitting')
+
+        fitting_model = gauss_2d
+        fitting_model_fwhm = gauss_sigma2fwhm
+
     try:
         logger.debug('Matching sources to catalog')
 
@@ -346,7 +363,7 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
 
             idx = np.array(data_update.index.values)[i]
 
-            print('\rMatching catalog source to image: %d / %d' % (float(i),len(data_update.index)), end = '',flush=False)
+            print('\rMatching catalog source to image: %d / %d '  % (float(i),len(data_update.index)), end = '')
 
             if useable_sources >= syntax['max_catalog_sources']:
                 break
@@ -373,8 +390,8 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
                  y_new_source.append(y)
 
                  # Create cutout image of size (2*syntax['scale'],2*syntax['scale'])
-                 close_up = image[int(y)-syntax['scale']: int(y) + syntax['scale'],
-                                  int(x)-syntax['scale']: int(x) + syntax['scale']]
+                 close_up = image[int(y-syntax['scale']): int(y + syntax['scale']),
+                                  int(x-syntax['scale']): int(x + syntax['scale'])]
 
 
                  # Cutout not possible - too close to edge or invalue pixel data i.e. nans of infs
@@ -435,7 +452,7 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
                  # If more than one source detected in close up
                  # assume source closest to center is desired source
                  if len(sources) >=2:
-                     r_vals = r_dist(syntax['scale'],np.array(sources['xcentroid']),
+                     r_vals = pix_dist(syntax['scale'],np.array(sources['xcentroid']),
                                      syntax['scale'],np.array(sources['ycentroid']))
 
                      r_idx = np.argmin(r_vals)
@@ -453,21 +470,21 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
                      yc_guess = np.array(sources['ycentroid'])[r_idx]
                  try:
 
-                     # Fit gaussian to source for centroiding location
-                     pars = lmfit.Parameters()
 
-                     pars.add('A', value = np.max(close_up),min = 0)
-                     pars.add('x0',value = xc_guess,min = 0.5*close_up.shape[0]-dx,max = 0.5*close_up.shape[0]+dx)
-                     pars.add('y0',value = yc_guess,min = 0.5*close_up.shape[0]-dy,max = 0.5*close_up.shape[0]+dy)
-                     pars.add('sky',value = np.median(close_up))
-                     pars.add('sigma',value = fwhm/2*np.sqrt(2*np.log(2)) )
+                     pars = lmfit.Parameters()
+                     pars.add('A',value = np.nanmax(close_up),min = 0)
+                     pars.add('x0',value = close_up.shape[1]/2,min = 0.5*close_up.shape[1] -dx ,max = 0.5*close_up.shape[1]+dx )
+                     pars.add('y0',value = close_up.shape[0]/2,min = 0.5*close_up.shape[0] -dy ,max = 0.5*close_up.shape[0]+dy)
+                     pars.add('sky',value = np.nanmedian(close_up))
+
 
                      def residual(p):
                         p = p.valuesdict()
-                        return (close_up - gauss_2d((xx,yy),p['x0'],p['y0'],p['sky'],p['A'],p['sigma']).reshape(close_up.shape)).flatten()
+                        return (close_up - fitting_model((xx,yy),p['x0'],p['y0'],p['sky'],p['A'],syntax['image_params']).reshape(close_up.shape)).flatten()
 
-                     mini = lmfit.Minimizer(residual, pars)
-                     result = mini.minimize(method = 'leastsq')
+                     mini = lmfit.Minimizer(residual, pars,nan_policy = 'omit')
+                     result = mini.minimize(method = 'least_squares')
+
 
                      xcen = result.params['x0'].value
                      ycen = result.params['y0'].value
@@ -475,7 +492,8 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
                      S    = result.params['sky'].value
                      H    = result.params['A'].value
 
-                     sigma =  result.params['sigma'].value
+                     sigma = fitting_model_fwhm(syntax['image_params'])
+
 
                  except Exception as e:
 
@@ -495,10 +513,11 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
 
                  centroid_x = xcen -   syntax['scale'] + x
                  centroid_y = ycen -   syntax['scale'] + y
+
                  x_new_cen.append(centroid_x)
                  y_new_cen.append(centroid_y)
 
-                 dist2target = r_dist(syntax['target_x_pix'],centroid_x,syntax['target_y_pix'],centroid_y)
+                 dist2target = pix_dist(syntax['target_x_pix'],centroid_x,syntax['target_y_pix'],centroid_y)
 
                  cp_dist.append(np.sqrt( (xcen - syntax['scale'])**2 + (ycen - syntax['scale'])**2) )
                  dist2target_list.append(dist2target)
@@ -545,6 +564,7 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
 
                 continue
 
+
         if syntax['show_nondetect_plot']:
 
             non_detections = np.array(non_detections)[np.isfinite(non_detections)]
@@ -575,6 +595,7 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
             ax.legend(loc = 'best')
             plt.show()
 
+        # print(' ... done')
 
         frame_data = [np.array(cat_idx).astype(int),
                       np.array(data_update[catalog_syntax['RA']]),
@@ -609,13 +630,47 @@ def match(image, headinfo, target_coords, syntax, catalog_syntax, filter_,data, 
         data_new_frame.set_index('cat_idx',inplace = True)
 
 
-        data_new_frame[filter_]        = data_update[catalog_syntax[filter_]]
-        data_new_frame[filter_+'_err'] = data_update[catalog_syntax[filter_+'_err']]
+        data_new_frame['cat_'+filter_]        = data_update[catalog_syntax[filter_]]
+        data_new_frame['cat_'+filter_+'_err'] = data_update[catalog_syntax[filter_+'_err']]
+
+
+        # for building colour terms include corrosponding colour
+        # standards used in color terhsm consitently throughout AutoPhoT
+        dmag = {
+            'U':['U','B'],
+            'B':['B','V'],
+            'V':['B','V'],
+            'R':['V','R'],
+            'I':['R','I'],
+            'u':['u','g'],
+            'g':['g','r'],
+            'r':['g','r'],
+            'i':['r','i'],
+            'z':['i','z']
+            }
+
+        # ct = [i for i in dmag[filter_] if i != filter_][0]
+
+        for ct  in list(dmag.keys()):
+            try:
+
+                if ct not in catalog_syntax:
+                    continue
+
+
+                data_new_frame['cat_'+ct]        = data_update[catalog_syntax[ct]]
+                data_new_frame['cat_'+ct+'_err'] = data_update[catalog_syntax[ct+'_err']]
+            except Exception:
+                # logger.exception(e)
+                continue
+
+
+
 
         data_new_frame = data_new_frame[~np.isnan(data_new_frame['x_pix'])]
         data_new_frame = data_new_frame[~np.isnan(data_new_frame['y_pix'])]
 
-        logger.info('Number of sources from catalog: %d' %len(data_new_frame))
+
 
         warnings.filterwarnings("default")
 

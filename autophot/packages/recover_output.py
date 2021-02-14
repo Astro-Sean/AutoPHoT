@@ -53,8 +53,10 @@ def recover(syntax):
     try:
         data = pd.concat(csv_recover,axis = 0,sort = False,ignore_index = True)
         data.drop_duplicates(inplace = True)
-        data.round(6).to_csv(recover_dir+'/'+str(syntax['outcsv_name']) + '.csv',index = False)
-        print('> Data Recovered <')
+
+        output_file = os.path.join(recover_dir, str(syntax['outcsv_name']) + '.csv')
+        data.round(6).to_csv(output_file,index = False)
+        print('Data recovered :: Output File:\n%s' % output_file)
     except Exception as e:
         exc_type, exc_obj, exc_tb = sys.exc_info()
         fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]

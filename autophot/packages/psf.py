@@ -8,117 +8,26 @@ Created on Tue Jan 29 12:24:07 2019
 """
 import matplotlib.pyplot as plt
 
-plt.rcParams['xtick.labelsize'] = 7
-plt.rcParams['ytick.labelsize'] = 7
-plt.rcParams['font.size'] = 7
-plt.rcParams['figure.subplot.hspace']= 0.1
-plt.rcParams['figure.subplot.wspace']= 0.1
-plt.rcParams['figure.dpi']= 100
-plt.rcParams['axes.titlesize'] = 7
-plt.rcParams['axes.labelsize'] = 7
-
-plt.rcParams['lines.linewidth'] = 1
-plt.rcParams['savefig.format'] = 'pdf'
-plt.rcParams['lines.markersize'] = 3
-
-plt.rcParams['legend.markerscale'] = 2
-plt.rcParams['legend.fontsize'] = 7
-
-plt.rcParams['xtick.major.size'] = 5
-plt.rcParams['xtick.minor.size'] = 3
-plt.rcParams['xtick.minor.width'] = 0.35
-plt.rcParams['xtick.direction'] = 'in'
-
-plt.rcParams['ytick.major.size'] = 5
-plt.rcParams['ytick.minor.size'] = 3
-plt.rcParams['ytick.major.width'] = 0.5
-plt.rcParams['ytick.minor.width'] = 0.35
-plt.rcParams['ytick.direction'] = 'in'
+import os
+dir_path = os.path.dirname(os.path.realpath(__file__))
+plt.style.use(os.path.join(dir_path,'autophot.mplstyle'))
 
 import numpy as np
-from scipy.optimize import least_squares
+
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-def gauss_2d(image, x0,y0, sky , A, sigma):
-    import numpy as np
-    (x,y) = image
-    a = (x-x0)**2
-    b = (y-y0)**2
-    c = (2*sigma**2)
-    d =  A*np.exp( -(a+b)/c)
-    e =  d + sky
-    return  e.ravel()
+from autophot.packages.functions import gauss_2d,moffat_2d
 
-def pixel_correction(x,m):
-    diff =  x - int(x)
-    if diff/m >= 0.5 or  diff ==0:
-        return np.ceil(x) - 0.5
-    if diff/m < 0.5:
-        return np.floor(x)
+from autophot.packages.functions import scale_roll
 
-# Whatever pixel (0,0 TL),coordinate on the image to the corrosponding corrdinate in center of pixel
-def array_correction(x):
-    diff =  float(x) % 1
-    if diff >= 0.5:
-        return np.ceil(x)
-    if diff < 0.5:
-        return np.floor(x)
+from autophot.packages.functions import rebin
 
-def norm(array):
-    import numpy as np
-    norm_array = (array - np.min(array))/(np.nanmax(array)-np.min(array))
-#    norm_array = array/np.nanmax(array)
-    return norm_array
+from autophot.packages.functions import gauss_fwhm2sigma,set_size,order_shift
 
-def renorm(array,lb,up):
-    s = up - lb
-    n =  (array - np.min(array))/(np.nanmax(array)-np.min(array))
-    m = (s * n) + lb
-    return m
+from autophot.packages.rm_bkg import rm_bkg
 
-def find_2d_int_percent(count_percent,fwhm):
-
-    from scipy.integrate import dblquad
-    sigma = fwhm/(2*np.sqrt(2*np.log(2)))
-
-    A = 1 / (2 * np.pi * sigma **2)
-    gauss = lambda y,x: A * np.exp( -1 * (((y)**2+(x)**2)/(2*sigma**2)))
-    fit = lambda x0: (count_percent - dblquad(gauss, -1*x0,x0,lambda x: -1*x0,lambda x: x0)[0])
-
-    r = least_squares(fit,x0 = 3)
-    return r.x[0]
-
-def get_an(image,xc,yc,r_in = None,r_out = None):
-    from photutils import CircularAnnulus
-
-    if r_in == None:
-        r_in = 0.95
-    if r_out == None:
-        r_in = 0.95
-
-    ap_an = CircularAnnulus((xc,yc),r_in = r_in ,r_out =  r_out)
-    mask_annulus = ap_an.to_mask(method='subpixel',subpixels=5 )
-    mask_annulus = mask_annulus[0].to_image(shape=((image.shape)))
-    mask_annulus /= mask_annulus.max()
-    an =  (abs(image * mask_annulus))
-
-    return an
-
-def scale_roll(x,xc,m):
-    dx = (x - xc)
-    if m !=1:
-        shift = int(round(dx *m))
-    else:
-        shift = int(dx *m)
-    return shift
-
-def rebin(arr, new_shape):
-    shape = (new_shape[0], arr.shape[0] // new_shape[0],
-             new_shape[1], arr.shape[1] // new_shape[1])
-    return arr.reshape(shape).mean(-1).mean(1)
-
-
+from astropy.stats import sigma_clip
 
 # =============================================================================
 # Point spread function by Me :)
@@ -127,11 +36,11 @@ def rebin(arr, new_shape):
 def build_r_table(base_image,selected_sources,syntax,fwhm):
 
     '''
-    Build psf model:
-        Fits gaussian to bright sources and removes fit gaussian to leave residual.
-        Residual signifies how the model gaussian deviates from the true psf of the image
-        Build up averaged table of these residual images to constuct a psf
-        with a gaussian core with this residual table
+     Build tables of residuals from bright isolated sources given in selected_sources dataframe
+
+     Function will function selected function to these sources and normialise there residaul array to build a residual image
+     which will then be used to make a PSF for the image
+
     '''
 
     import numpy as np
@@ -143,16 +52,25 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
     import lmfit
     import logging
 
-    import sys,os
-    import matplotlib.pyplot as plt
-    import pathlib
-    from astropy.stats import sigma_clip
-    from astropy.stats import SigmaClip
-    from photutils import Background2D, MedianBackground
-
-    from autophot.packages.functions import r_dist
+    from autophot.packages.functions import pix_dist,gauss_sigma2fwhm
     from autophot.packages.uncertain import SNR
     from autophot.packages.aperture  import ap_phot
+
+    from autophot.packages.functions import gauss_2d,gauss_fwhm2sigma
+
+    from autophot.packages.functions import moffat_2d,moffat_fwhm
+
+
+
+    if syntax['use_moffat']:
+        fitting_model = moffat_2d
+        fitting_model_fwhm = moffat_fwhm
+
+    else:
+        fitting_model = gauss_2d
+        fitting_model_fwhm = gauss_sigma2fwhm
+
+
 
     try:
 
@@ -160,47 +78,63 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
 
         image = base_image.copy()
 
+        # Only fit to a small image with radius ~the fwhm
         fitting_radius = int(np.ceil(fwhm))
 
+        # for matchinf each source residual image with will regrid the image for shifting later
         regriding_size = int(syntax['regrid_size'])
-        m = regriding_size
-
-        sigma_fit = []
-
-        construction_sources = []
+        # m = regriding_size
 
         if regriding_size % 2 > 0:
             logger.info('regrid size must be even adding 1')
             regriding_size += 1
 
+        # FWHM/sigma fits
+        fwhm_fit = []
+
+        # what sources will be used
+        construction_sources = []
+
         # Residual Table in extended format
-        residual_table = np.zeros((2 * syntax['scale'] * regriding_size, 2 * syntax['scale']*regriding_size))
+        residual_table = np.zeros((int(2 * syntax['scale'] * regriding_size), int(2 * syntax['scale']*regriding_size)))
 
-        selected_sources['dist'] =  r_dist(syntax['target_x_pix'],selected_sources.x_pix,
-                                           syntax['target_y_pix'],selected_sources.y_pix)
 
-        lower_bkg_source = sigma_clip(selected_sources['median'],
-                                      sigma=3,
-                                      maxiters=3,
-                                      masked = True)
+        # if syntax['remove_sat']:
+        #     len_with_sat = len(selected_sources)
+        #     selected_sources = selected_sources[selected_sources['flux_ap']+selected_sources['median']<= syntax['sat_lvl']]
+        #     print('%d saturdated PSF stars removed' % (len_with_sat-len(selected_sources)))
 
-        selected_sources = selected_sources[~lower_bkg_source.mask]
+        selected_sources['dist'] =  pix_dist(syntax['target_x_pix'],selected_sources.x_pix,
+                                             syntax['target_y_pix'],selected_sources.y_pix)
+
+        selected_sources_mask = sigma_clip(selected_sources['median'], sigma=3, maxiters=5,masked=True)
+
+        selected_sources = selected_sources[~selected_sources_mask.mask]
+
+
+
+
+
+
+        if syntax['use_local_stars_for_PSF']:
+
+            '''
+            Use local stars given by 'use_acrmin' parameter
+
+            '''
+            selected_sources_test = selected_sources[selected_sources['dist'] <= syntax['local_radius']]
+
+            selected_sources  = selected_sources_test
+
 
         flux_idx = [i for i in selected_sources.flux_ap.sort_values(ascending = False).index]
-        flux_idx = [i for i in selected_sources.dist.sort_values(ascending = True).index]
 
         sources_used = 1
         n = 0
         failsafe = 0
         psf_mag = []
         image_radius_lst = []
-
-        sigma  = fwhm/(2*np.sqrt(2*np.log(2)))
-
-        # level
-        level = syntax['lim_SNR']
-
-        logger.info('Limiting threshold: %s sigma' % level)
+        sources_dict = {}
 
 
         while sources_used <= syntax['psf_source_no']:
@@ -208,7 +142,7 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
             if failsafe>25:
                 logger.info('PSF - Failed to build psf')
                 residual_table=None
-                sigma_fit = fwhm
+                fwhm_fit = fwhm
 
 
             if n >= len(flux_idx):
@@ -217,7 +151,7 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
                     break
                 logger.info('PSF - Ran out of sources')
                 residual_table=None
-                sigma_fit = fwhm
+                fwhm_fit = fwhm
                 break
             try:
 
@@ -225,19 +159,24 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
 
                 n+=1
 
-                psf_image = image[int(selected_sources.y_pix[idx])-syntax['scale']: int(selected_sources.y_pix[idx]) + syntax['scale'],
-                                  int(selected_sources.x_pix[idx])-syntax['scale']: int(selected_sources.x_pix[idx]) + syntax['scale']]
+                # Inital guess at where psf source is is
+                psf_image = image[int(selected_sources.y_pix[idx]-syntax['scale']): int(selected_sources.y_pix[idx] + syntax['scale']),
+                                  int(selected_sources.x_pix[idx]-syntax['scale']): int(selected_sources.x_pix[idx] + syntax['scale'])]
+
                 if len(psf_image) == 0:
                     logger.info('PSF image ERROR')
                     continue
-                if np.min(psf_image) == np.nan:
+                try:
+                    if np.min(psf_image) == np.nan:
+                        continue
+                except:
                     continue
 
 
-                mean, median , std = sigma_clipped_stats(psf_image, sigma = syntax['source_sigma_close_up'], maxiters = syntax['iters'])
+                mean, median, std = sigma_clipped_stats(psf_image, sigma = syntax['source_sigma_close_up'], maxiters = syntax['iters'])
 
                 daofind = DAOStarFinder(fwhm=np.floor(fwhm),
-                                     threshold = syntax['bkg_level']*std,
+                                     threshold = syntax['lim_SNR']*std,
                                      roundlo = -1.0, roundhi = 1.0,
                                      sharplo =  0.2, sharphi = 1.0)
 
@@ -249,11 +188,11 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
 
                 if len(sources) > 1:
 
-                    dist = [list(r_dist(
-                            sources['xcentroid'][i]
-                            ,sources['xcentroid']
-                            ,sources['ycentroid'][i]
-                            ,sources['ycentroid']) for i in range(len(sources)))]
+                    dist = [list(pix_dist(
+                            sources['xcentroid'][i],
+                            sources['xcentroid'],
+                            sources['ycentroid'][i],
+                            sources['ycentroid']) for i in range(len(sources)))]
 
                     dist = np.array(list(set(np.array(dist).flatten())))
 
@@ -262,85 +201,51 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
                     else:
                         continue
 
-                psf_image = image[int(selected_sources.y_pix[idx])-syntax['scale']: int(selected_sources.y_pix[idx]) + syntax['scale'],
-                                  int(selected_sources.x_pix[idx])-syntax['scale']: int(selected_sources.x_pix[idx]) + syntax['scale']]
+                psf_image = image[int(selected_sources.y_pix[idx]-syntax['scale']): int(selected_sources.y_pix[idx]+syntax['scale']),
+                                  int(selected_sources.x_pix[idx]-syntax['scale']): int(selected_sources.x_pix[idx]+syntax['scale'])]
 
+                psf_image_bkg_free,bkg_surface = rm_bkg(psf_image,syntax,psf_image.shape[0]/2,psf_image.shape[0]/2)
 
-
-                if syntax['psf_bkg_surface']:
-
-
-                    sigma_clip = SigmaClip(sigma=syntax['Lim_SNR'])
-                    bkg_estimator = MedianBackground()
-                    bkg = Background2D(psf_image, (3, 3),
-                                       filter_size=(5, 5),
-                                       sigma_clip=sigma_clip,
-                                       bkg_estimator=bkg_estimator)
-
-
-                    surface = bkg.background
-
-                    # bkg_median = np.nanmedian(bkg.background_median)
-                    psf_image_bkg_free = psf_image- surface
-
-                if syntax['psf_bkg_poly']:
-
-
-                    # Fit 2D surface to close_up
-                    from astropy.modeling import models, fitting
-                    surface_function_init = models.Polynomial2D(degree=syntax['psf_bkg_poly_degree'])
-
-                    fit_surface = fitting.LevMarLSQFitter()
-
-
-                    x = np.arange(0,psf_image.shape[0])
-                    y = np.arange(0,psf_image.shape[1])
-                    xx,yy= np.meshgrid(x,y)
-
-
-                    with warnings.catch_warnings():
-                        # Ignore model linearity warning from the fitter
-                        warnings.simplefilter('ignore')
-                        surface_fit = fit_surface(surface_function_init, xx, yy, psf_image)
-
-
-                    surface = surface_fit(xx,yy)
-
-                    # bkg_median = np.nanmedian(surface)
-                    psf_image_bkg_free = psf_image - surface
-
-
-                if syntax['psf_bkg_local']:
-
-                    pos = list(zip([psf_image.shape[0]/2],[psf_image.shape[0]/2]))
-
-                    ap , bkg = ap_phot(pos ,
-                                       image,
-                                       radius = syntax['ap_size'] * fwhm,
-                                       r_in   = syntax['r_in_size'] * fwhm,
-                                       r_out  = syntax['r_out_size'] * fwhm)
-
-                    psf_image_bkg_free = psf_image - ( np.ones(psf_image.shape) * bkg)
-
-                    # bkg_median = bkg[0]
 
                 x = np.arange(0,2*syntax['scale'])
                 xx,yy= np.meshgrid(x,x)
 
                 pars = lmfit.Parameters()
-
-                pars.add('A',value = np.nanmax(psf_image_bkg_free),min = 0)
-                pars.add('x0',value = psf_image_bkg_free.shape[0]/2,min = 0,max = psf_image_bkg_free.shape[0])
-                pars.add('y0',value = psf_image_bkg_free.shape[0]/2,min = 0,max = psf_image_bkg_free.shape[0])
-                pars.add('sigma',value = sigma )
+                pars.add('A',value = np.nanmax(psf_image_bkg_free),min=0)
+                pars.add('x0',value = psf_image_bkg_free.shape[1]/2,min = 0, max =psf_image_bkg_free.shape[1] )
+                pars.add('y0',value = psf_image_bkg_free.shape[0]/2,min = 0, max =psf_image_bkg_free.shape[0])
                 pars.add('sky',value = np.nanmedian(psf_image_bkg_free))
 
-                def residual(p):
-                    p = p.valuesdict()
-                    return (psf_image_bkg_free - gauss_2d((xx,yy),p['x0'],p['y0'],p['sky'],p['A'],p['sigma']).reshape(psf_image_bkg_free.shape)).flatten()
+                if syntax['use_moffat']:
+                    pars.add('alpha',value = syntax['image_params']['alpha'],
+                             min = 0,
+                             vary =  syntax['fit_PSF_FWHM'] )
+                    pars.add('beta',value = syntax['image_params']['beta'],
+                             min = 0,
+                             vary = syntax['vary_moff_beta'] or syntax['fit_PSF_FWHM']  )
 
-                mini = lmfit.Minimizer(residual, pars)
-                result = mini.minimize(method = 'leastsq')
+                else:
+                    pars.add('sigma', value = syntax['image_params']['sigma'],
+                             min = 0,
+                             max = gauss_fwhm2sigma(syntax['max_fit_fwhm']),
+                              vary = syntax['vary_moff_beta'] or syntax['fit_PSF_FWHM']
+                             )
+
+
+                if syntax['use_moffat']:
+                    def residual(p):
+                        p = p.valuesdict()
+                        return (psf_image_bkg_free - moffat_2d((xx,yy),p['x0'],p['y0'],p['sky'],p['A'],dict(alpha=p['alpha'],beta=p['beta'])).reshape(psf_image_bkg_free.shape)).flatten()
+                else:
+                    def residual(p):
+                      p = p.valuesdict()
+                      return (psf_image_bkg_free - gauss_2d((xx,yy),p['x0'],p['y0'],p['sky'],p['A'],dict(sigma=p['sigma'])).reshape(psf_image_bkg_free.shape)).flatten()
+
+
+                mini = lmfit.Minimizer(residual, pars,nan_policy = 'omit')
+                result = mini.minimize(method = 'least_squares')
+
+
                 xc = result.params['x0'].value
                 yc = result.params['y0'].value
 
@@ -364,91 +269,64 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
                 image_radius = radius * fwhm
                 image_radius_lst.append(image_radius)
 
+
+                '''
+                refit only focusing on highest SNR area given by fitting radius
+
+                '''
+
                 # global pixel coorindates base on bn gaussian fit
                 xc_global = xc - syntax['scale'] + int(selected_sources.x_pix[idx])
                 yc_global = yc - syntax['scale'] + int(selected_sources.y_pix[idx])
 
                 # recenter image absed on location of best fit x and y
-                psf_image = image[int(yc_global)-syntax['scale']: int(yc_global) + syntax['scale'],
-                                  int(xc_global)-syntax['scale']: int(xc_global) + syntax['scale']]
+                psf_image = image[int(yc_global-syntax['scale']): int(yc_global + syntax['scale']),
+                                  int(xc_global-syntax['scale']): int(xc_global + syntax['scale'])]
 
-                if syntax['psf_bkg_surface']:
-
-
-                    sigma_clip = SigmaClip(sigma=syntax['Lim_SNR'])
-                    bkg_estimator = MedianBackground()
-                    bkg = Background2D(psf_image, (3, 3),
-                                       filter_size=(5, 5),
-                                       sigma_clip=sigma_clip,
-                                       bkg_estimator=bkg_estimator)
-
-
-                    surface = bkg.background
-
-                    # bkg_median = np.nanmedian(bkg.background_median)
-                    psf_image_bkg_free = psf_image- surface
-
-                if syntax['psf_bkg_poly']:
-
-
-                    # Fit 2D surface to close_up
-                    from astropy.modeling import models, fitting
-                    surface_function_init = models.Polynomial2D(degree=syntax['psf_bkg_poly_degree'])
-
-                    fit_surface = fitting.LevMarLSQFitter()
-
-
-                    x = np.arange(0,psf_image.shape[0])
-                    y = np.arange(0,psf_image.shape[1])
-                    xx,yy= np.meshgrid(x,y)
-
-                    with warnings.catch_warnings():
-                        # Ignore model linearity warning from the fitter
-                        warnings.simplefilter('ignore')
-
-                        surface_fit = fit_surface(surface_function_init, xx, yy, psf_image)
-
-
-                        surface = surface_fit(xx,yy)
-
-                        # bkg_median = np.nanmedian(surface)
-                        psf_image_bkg_free = psf_image - surface
-
-
-                if syntax['psf_bkg_local']:
-
-                    pos = list(zip([psf_image.shape[0]/2],[psf_image.shape[0]/2]))
-
-                    ap , bkg = ap_phot(pos ,
-                                       image,
-                                       radius = syntax['ap_size'] * fwhm,
-                                       r_in   = syntax['r_in_size'] * fwhm,
-                                       r_out  = syntax['r_out_size'] * fwhm)
-
-                    psf_image_bkg_free = psf_image - ( np.ones(psf_image.shape) * bkg)
-
-                    # bkg_median = bkg[0]
+                psf_image_bkg_free,bkg_median = rm_bkg(psf_image,syntax,psf_image.shape[0]/2,psf_image.shape[0]/2)
 
                 psf_image_slice = psf_image_bkg_free[int(psf_image_bkg_free.shape[0]/2 - fitting_radius):int(psf_image_bkg_free.shape[0]/2 + fitting_radius) ,
-                                            int(psf_image_bkg_free.shape[0]/2 - fitting_radius):int(psf_image_bkg_free.shape[0]/2 + fitting_radius) ]
+                                                     int(psf_image_bkg_free.shape[0]/2 - fitting_radius):int(psf_image_bkg_free.shape[0]/2 + fitting_radius) ]
 
 
                 x_slice = np.arange(0,2*fitting_radius)
                 xx_sl,yy_sl= np.meshgrid(x_slice,x_slice)
 
                 pars = lmfit.Parameters()
-                pars.add('A',value = np.nanmax(psf_image_slice),min = 1e-5)
-                pars.add('x0',value = psf_image_slice.shape[0]/2)
-                pars.add('y0',value = psf_image_slice.shape[0]/2)
-                pars.add('sigma',value = sigma )
+                pars.add('A',value = np.nanmean(psf_image_slice),min = 0,max = np.nanmax(psf_image_slice) )
+                pars.add('x0',value = psf_image_slice.shape[1]/2,min = 0,max = psf_image_slice.shape[1])
+                pars.add('y0',value = psf_image_slice.shape[0]/2,min = 0,max = psf_image_slice.shape[0] )
 
-                def residual(p):
-                    p = p.valuesdict()
-                    return (psf_image_slice - gauss_2d((xx_sl,yy_sl),p['x0'],p['y0'],0,p['A'],p['sigma']).reshape(psf_image_slice.shape)).flatten()
+                if syntax['use_moffat']:
+
+                    pars.add('alpha',value = syntax['image_params']['alpha'],
+                             min = 0,
+                             vary =  syntax['fit_PSF_FWHM'] )
+
+                    pars.add('beta',value = syntax['image_params']['beta'],
+                             min = 0,
+                             vary = syntax['vary_moff_beta'] or syntax['fit_PSF_FWHM']  )
+
+                else:
+
+                    pars.add('sigma', value = syntax['image_params']['sigma'],
+                             min = 0,
+                             max = gauss_fwhm2sigma(syntax['max_fit_fwhm']),
+                             vary =  syntax['fit_PSF_FWHM']
+                             )
+
+                if syntax['use_moffat']:
+                    def residual(p):
+                        p = p.valuesdict()
+                        return (psf_image_slice  - moffat_2d((xx_sl,yy_sl),p['x0'],p['y0'],0,p['A'],dict(alpha=p['alpha'],beta=p['beta'])).reshape(psf_image_slice .shape)).flatten()
+                else:
+                    def residual(p):
+                        p = p.valuesdict()
+                        return (psf_image_slice - gauss_2d((xx_sl,yy_sl),p['x0'],p['y0'],0,p['A'],dict(sigma=p['sigma'])).reshape(psf_image_slice.shape)).flatten()
 
                 mini = lmfit.Minimizer(residual, pars,nan_policy = 'omit')
-
-                result = mini.minimize(method = 'leastsq')
+                result = mini.minimize(method = 'least_squares')
+                # print(result.params)
 
                 positions  = list(zip([xc_global ],[yc_global ]))
 
@@ -458,28 +336,57 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
                                              r_in   = syntax['r_in_size']  * fwhm,
                                              r_out  = syntax['r_out_size'] * fwhm)
 
-                psf_SNR = SNR(psf_counts,psf_bkg,syntax['exp_time'],0,syntax['ap_size']* fwhm,syntax['gain'],0)[0]
 
-                if psf_SNR < syntax['construction_SNR']:
-                    logger.debug('PSF constuction source too low: %s' % int(psf_SNR))
+
+                if syntax['use_moffat']:
+                    PSF_FWHM = fitting_model_fwhm(dict(alpha=result.params['alpha'],beta=result.params['beta']))
+                else:
+                    PSF_FWHM = fitting_model_fwhm(dict(sigma=result.params['sigma']))
+
+
+                PSF_SNR = SNR(psf_counts,psf_bkg,syntax['exp_time'],0,syntax['ap_size']*fwhm,syntax['gain'],0)[0]
+
+                if np.isnan(PSF_SNR) or np.isnan(PSF_FWHM):
+                    logger.debug('PSF Contruction source fitting error')
+                    continue
+
+
+                if PSF_SNR < syntax['construction_SNR'] and syntax['exp_time'] > 1:
+                    logger.debug('PSF constuction source too low: %s' % int(PSF_SNR))
                     continue
                 else:
-                    logger.debug('PSF construction source SNR: %s' % int(psf_SNR))
-                    # print('\rPSF source %d / %d :: SNR: %d' % (int(psf_SNR)),end = '')
+                    logger.info('SNR: %d FWHM: %.3f' % (PSF_SNR,PSF_FWHM))
+                    # print('\rPSF source %d / %d :: SNR: %d' % (int(PSF_SNR)),end = '')
                     pass
 
+                # print(result.params)
                 xc = result.params['x0'].value
                 yc = result.params['y0'].value
 
                 H = result.params['A'].value
-                sigma = abs(result.params['sigma'].value)
+                H_err = result.params['A'].stderr
 
-                xc_os = ( xc - fitting_radius ) + syntax['scale']
-                yc_os = ( yc - fitting_radius ) + syntax['scale']
 
-                residual = psf_image_bkg_free - gauss_2d((xx,yy),xc_os,yc_os,0,H,sigma).reshape(psf_image_bkg_free.shape)
+                xc_correction =  xc - fitting_radius + syntax['scale']
+                yc_correction =  yc - fitting_radius + syntax['scale']
+
+                if syntax['use_moffat']:
+
+                    residual = psf_image_bkg_free - moffat_2d((xx,yy),xc_correction,yc_correction,
+                                                              0,H,
+                                                              dict(alpha=result.params['alpha'],beta=result.params['beta'])).reshape(psf_image_bkg_free.shape)
+                    PSF_FWHM = fitting_model_fwhm(dict(alpha=result.params['alpha'],beta=result.params['beta']))
+                else:
+                    residual = psf_image_bkg_free - gauss_2d((xx,yy),xc_correction,yc_correction,
+                                                             0,H,
+                                                             dict(sigma=result.params['sigma'])).reshape(psf_image_bkg_free.shape)
+                    PSF_FWHM = fitting_model_fwhm(dict(sigma=result.params['sigma']))
+
+
 
                 residual /= H
+
+
 
                 psf_mag.append(-2.5*np.log10(H))
 
@@ -490,178 +397,128 @@ def build_r_table(base_image,selected_sources,syntax,fwhm):
 
                 residual_roll = np.roll(np.roll(residual_regrid,y_roll,axis=0),x_roll,axis = 1)
 
-                if syntax['r_table_shift_check']:
-                    fig, ax = plt.subplots(nrows = 2,ncols = 2, figsize = (20,20))
-
-                    def drawArrow(n , A, B):
-                        n.arrow(A[0], A[1], B[0] - A[0], B[1] - A[1],
-                          head_width=0.5, length_includes_head=True)
-
-                    im = {}
-
-                    im[0] = ax[0,0].imshow(psf_image_bkg_free)
-                    ax[0,0].set_title('Source:'+str(n))
-                    ax[0,0].axvline(xc_os,linestyle = ':',color = 'red')
-                    ax[0,0].axhline(yc_os,label = 'Best fit',linestyle = ':',color = 'red')
-                    ax[0,0].axvline(psf_image_bkg_free.shape[0]/2,color = 'black',linestyle = ':')
-                    ax[0,0].axhline(psf_image_bkg_free.shape[0]/2,color = 'black',label = 'Center of image',linestyle = ':')
-
-
-                    im[1] = ax[0,1].imshow(residual)
-                    ax[0,1].set_title('Residuals from source @ Normal scale')
-                    ax[0,1].axvline(xc_os,linestyle = ':',color = 'red')
-                    ax[0,1].axhline(yc_os,label = 'Best fit',linestyle = ':',color = 'red')
-                    ax[0,1].axvline(psf_image_bkg_free.shape[0]/2,color = 'black',linestyle = ':')
-                    ax[0,1].axhline(psf_image_bkg_free.shape[0]/2,color = 'black',label = 'Center of image',linestyle = ':')
-
-                    im[2] = ax[1,0].imshow(residual_regrid)
-                    ax[1,0].set_title('Residuals  shift s.t xc,yc are at center')
-                    ax[1,0].scatter(array_correction(xc_os*m),array_correction(yc_os*m),marker = 'x',color = 'red',label = 'Location of best fit before roll with regridding')
-                    ax[1,0].scatter(residual_regrid.shape[0]/2,residual_regrid.shape[0]/2,marker = 'o',facecolors='none', edgecolors='black',label = 'Image center')
-                    ax[1,0].set_xticks(np.arange(-.5, residual_regrid.shape[0], 1), minor=True)
-                    ax[1,0].set_yticks(np.arange(-.5, residual_regrid.shape[0], 1), minor=True)
-                    ax[1,0].grid(which='minor', color='black', linestyle='-', linewidth = 1 , alpha = 0.1)
-
-                    im[3] = ax[1,1].imshow(residual_roll)
-                    ax[1,1].set_title('Regrid Residuals after roll')
-                    ax[1,1].scatter(array_correction(x_roll +xc_os*m),array_correction(y_roll +yc_os*m),marker = 'x',color = 'red',label = 'Location of best fit plus roll adjustment ')
-                    ax[1,1].scatter(residual_regrid.shape[0]/2,residual_regrid.shape[0]/2,marker = 'o',facecolors='none', edgecolors='black',label = 'Image center')
-                    ax[1,1].plot([None],[None],label = 'Roll: xr '+str(x_roll)+' yr '+str(y_roll))
-                    ax[1,1].set_xticks(np.arange(-.5, residual_regrid.shape[0], 1), minor=True);
-                    ax[1,1].set_yticks(np.arange(-.5, residual_regrid.shape[0], 1), minor=True)
-                    ax[1,1].grid(which='minor', color='black', linestyle='-', linewidth = 1 , alpha = 0.1)
-
-
-                    from mpl_toolkits.axes_grid1 import make_axes_locatable
-
-                    for i in range(len(ax.reshape(-1))):
-                        na = ax.reshape(-1)[i]
-
-                        na.legend(loc = 'best')
-
-                        divider = make_axes_locatable(na)
-                        cax = divider.append_axes("right", size="5%", pad=0.05)
-                        fig.colorbar(im[i], cax=cax)
-
-                    pathlib.Path(syntax['write_dir']+'residual_shift_check/').mkdir(parents = True, exist_ok=True)
-
-                    import time
-
-                    if os.path.exists(syntax['write_dir']+'residual_shift_check/'+'result.png'):
-                        plt.savefig(syntax['write_dir']+'residual_shift_check/'+'result_{}.png'.format(int(time.time())))
-                    else:
-                        plt.savefig(syntax['write_dir']+'residual_shift_check/'+'result.png')
-
-
-                    plt.close(fig)
-
                 residual_table += residual_roll
-                construction_sources.append([xc_global,yc_global,H/syntax['exp_time']])
+
+                sources_dict['PSF_%d'%sources_used] = {}
+
+                # print(H_err)
+
+                sources_dict['PSF_%d'%sources_used]['x_pix']  = xc_global
+                sources_dict['PSF_%d'%sources_used]['y_pix']  = yc_global
+                sources_dict['PSF_%d'%sources_used]['H_psf'] = float(H/syntax['exp_time'])
+                # sources_dict['PSF_%d'%sources_used]['H_psf_err'] = float(H_err/syntax['exp_time'])
+                sources_dict['PSF_%d'%sources_used]['fwhm'] = PSF_FWHM
+                sources_dict['PSF_%d'%sources_used]['x_best'] = xc_correction
+                sources_dict['PSF_%d'%sources_used]['y_best'] = yc_correction
+
+
+                sources_dict['PSF_%d'%sources_used]['close_up'] = psf_image_bkg_free
+                sources_dict['PSF_%d'%sources_used]['residual'] = residual
+                sources_dict['PSF_%d'%sources_used]['regrid'] = residual_regrid
+                sources_dict['PSF_%d'%sources_used]['roll'] = residual_roll
+                sources_dict['PSF_%d'%sources_used]['x_roll'] =x_roll
+                sources_dict['PSF_%d'%sources_used]['y_roll'] =y_roll
+
                 logger.debug('Residual table updated: %d / %d ' % (sources_used,syntax['psf_source_no']))
 
                 print('\rResidual table updated: %d / %d ' % (sources_used,syntax['psf_source_no']) ,end = '')
                 sources_used +=1
 
-                sigma_fit.append(sigma)
+                fwhm_fit.append(PSF_FWHM)
+
 
             except Exception as e:
-                logger.exception(e)
+                # logger.exception(e)
 
-                logger.error('trying another source')
+                logger.error('** Fitting error - trying another source**')
                 failsafe+=1
                 n+=1
-                try:
-                    plt.close(fig)
-                except:
-                    pass
 
                 continue
-        print('')
+        print('  ')
 
         if sources_used < syntax['min_psf_source_no']:
             logger.warning('BUILDING PSF: Not enough useable sources found')
             return None,None,construction_sources.append([np.nan]*5),syntax
 
         logger.debug('PSF Successful')
+
+        #
+        # Get average of residual table
         residual_table/= sources_used
 
-        residual_table  = rebin(residual_table,(2*syntax['scale'],2*syntax['scale']))
+        # regrid residual table to psf size
+        residual_table  = rebin(residual_table,( int(2*syntax['scale']),int(2*syntax['scale'])))
 
-        construction_sources = pd.DataFrame(construction_sources)
+        # construction_sources = pd.DataFrame(construction_sources)
+        construction_sources = pd.DataFrame.from_dict(sources_dict, orient='index',
+                                                      columns=['x_pix','y_pix','H_psf','H_psf_err','fwhm','x_best','y_best'])
+        construction_sources.reset_index(inplace = True)
 
+        if syntax['plots_PSF_residual']:
+            from autophot.packages.create_plots import plot_PSF_model_steps
+            plot_PSF_model_steps(sources_dict,syntax,image)
 
-        '''
-        Black magic time -- Removing negative counts in PSF model and updating residual table
+        if syntax['plots_PSF_sources']:
 
-        '''
-        x_rebin = np.arange(0,residual_table.shape[0])
+            from autophot.packages.create_plots import plot_PSF_construction_grid
 
-        xx_rebin,yy_rebin = np.meshgrid(x_rebin,x_rebin)
-        psf_sigma = np.mean(sigma_fit)
+            plot_PSF_construction_grid(construction_sources,image,syntax)
 
-        psf_core = gauss_2d((xx_rebin,yy_rebin),residual_table.shape[0]/2,residual_table.shape[0]/2,0,1,psf_sigma).reshape(residual_table.shape)
-
-        tmp_psf = psf_core + residual_table
-
-        tmp_psf[tmp_psf > 0] = 0
-
-        residual_table -= tmp_psf
 
         image_radius_lst = np.array(image_radius_lst)
 
         syntax['image_radius'] = image_radius_lst.mean()
-        logger.info('Image_radius [pix] : %s +/- %s' % (round(image_radius_lst.mean(),3) ,round(image_radius_lst.std(),3)))
 
-        # for finding error on psf, not implemented yet
-        construction_sources.columns = ['x_pix','y_pix','H_psf']
-        construction_sources['H_psf_err'] = [0]*len(construction_sources)
+        logger.info('Image_radius [pix] : %.3f +/- %.3f' % (image_radius_lst.mean(), image_radius_lst.std()))
 
     except Exception as e:
-                logger.exception('BUILDING PSF: ',e)
-                raise Exception
+        logger.exception('BUILDING PSF: ',e)
+        raise Exception
+
+    return residual_table,fwhm_fit,construction_sources,syntax
 
 
-
-    return residual_table,sigma_fit,construction_sources,syntax
-
-'''
-Once PSF is built, Do fitting
-'''
-
-def fit(image,
-        sources,
-        residual_table,
-        syntax,
-        fwhm,
-        save_plot = False,
-        show_plot = False,
-        rm_bkg_val = True,
-        hold_pos = False,
-        return_fwhm = False,
-        return_subtraction_image = False,
-        fname = None
+def fit(image,sources,residual_table,syntax,fwhm,
+        return_psf_model = False,
+        save_plot = False,show_plot = False,
+        rm_bkg_val = True,hold_pos = False,
+        return_fwhm = False,return_subtraction_image = False,
+        fname = None,no_print = False
 
         ):
+
+
+
+    '''
+
+    Fitting of PSF model to source
+
+    '''
+
 
     import numpy as np
     import pandas as pd
     import pathlib
     import lmfit
     import logging
-    # import sys,os
+
     import matplotlib.pyplot as plt
-    from astropy.stats import SigmaClip
-    from photutils import Background2D, MedianBackground
 
+    from autophot.packages.functions import gauss_2d,moffat_2d,moffat_fwhm,gauss_sigma2fwhm
 
+    from matplotlib.gridspec import  GridSpec
 
+    import os
 
-    from autophot.packages.aperture  import ap_phot
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    plt.style.use(os.path.join(dir_path,'autophot.mplstyle'))
+
 
     logger = logging.getLogger(__name__)
 
 
-    fitting_radius = int(np.ceil(1.5*fwhm))
+    fitting_radius = int(np.ceil(1.3*fwhm))
     regriding_size = int(syntax['regrid_size'])
 
     sources = sources
@@ -677,16 +534,16 @@ def fit(image,
 
             psf_shape = r_table.shape
 
-
             if pad_shape != None:
-                psf_shape = pad_shape
-
-
-            if pad_shape != None:
+                #  Need to make PSF fitting bigger
                 top =    int((pad_shape[0] - r_table.shape[0])/2)
                 bottom=  int((pad_shape[0] - r_table.shape[0])/2)
                 left =   int((pad_shape[1] - r_table.shape[1])/2)
                 right =  int((pad_shape[1] - r_table.shape[1])/2)
+
+                # print((top, bottom), (left, right))
+
+                psf_shape = pad_shape
 
                 r_table = np.pad(r_table, [(top, bottom), (left, right)], mode='constant', constant_values=0)
 
@@ -695,29 +552,31 @@ def fit(image,
 
             xx_rebin,yy_rebin = np.meshgrid(x_rebin,y_rebin)
 
-            sigma  = fwhm/(2*np.sqrt(2*np.log(2)))
+            # sigma  = fwhm/(2*np.sqrt(2*np.log(2)))
+            if syntax['use_moffat']:
+                core = moffat_2d((xx_rebin,yy_rebin),xc,yc,sky,H,syntax['image_params']).reshape(psf_shape)
 
-            core = gauss_2d((xx_rebin,yy_rebin),xc,yc,sky,H,sigma).reshape(psf_shape)
+            else:
+                core = gauss_2d((xx_rebin,yy_rebin),xc,yc,sky,H,syntax['image_params']).reshape(psf_shape)
 
             residual_rebinned = np.repeat(np.repeat(r_table, regriding_size, axis=0), regriding_size, axis=1)
 
-            x_roll = scale_roll(xc,int(r_table.shape[0]/2),regriding_size)
-            y_roll = scale_roll(yc,int(r_table.shape[1]/2),regriding_size)
+            x_roll = scale_roll(xc,int(r_table.shape[1]/2),regriding_size)
+            y_roll = scale_roll(yc,int(r_table.shape[0]/2),regriding_size)
 
             residual_roll = np.roll(np.roll(residual_rebinned,y_roll,axis=0),x_roll,axis = 1)
 
             residual = rebin(residual_roll,psf_shape)
 
-            psf =  (sky  + (H * residual)) + core
+            psf =  (sky  + (H* residual )) + core
 
             if np.isnan(np.min(psf)):
                 logger.info(sky,H,np.min(residual),np.min(core))
 
             psf[np.isnan(psf)] = 0
-            psf[psf<0] = 0
 
             if slice_scale != None:
-                psf = psf[int ( 0.5 * r_table.shape[0] - slice_scale): int(0.5*r_table.shape[0] + slice_scale),
+                psf = psf[int ( 0.5 * r_table.shape[1] - slice_scale): int(0.5*r_table.shape[1] + slice_scale),
                           int ( 0.5 * r_table.shape[0] - slice_scale): int(0.5*r_table.shape[0] + slice_scale)]
 
         except Exception as e:
@@ -727,6 +586,20 @@ def fit(image,
         return psf
 
 
+    if return_psf_model:
+
+        shape = int(2*syntax['scale']),int(2*syntax['scale'])
+        x_slice = np.arange(0,shape[0])
+        xx_sl,yy_sl= np.meshgrid(x_slice,x_slice)
+
+        if syntax['use_moffat']:
+            PSF_model = moffat_2d((xx_sl,yy_sl),shape[1]/2,shape[1]/2,0,1,dict(alpha=syntax['image_params']['alpha'],beta=syntax['image_params']['beta'])).reshape(shape)
+        else:
+            PSF_model= gauss_2d((xx_sl,yy_sl),shape[1]/2,shape[1]/2,0,1,dict(sigma=syntax['image_params']['sigma'])).reshape(shape)
+
+        return PSF_model
+
+
     psf_params = []
 
     x = np.arange(0,2*syntax['scale'])
@@ -734,8 +607,8 @@ def fit(image,
     xx,yy= np.meshgrid(x,x)
 
     if hold_pos:
-        dx = 1e-3
-        dy = 1e-3
+        dx = 1e-6
+        dy = 1e-6
     else:
         dx = syntax['dx']
         dy = syntax['dy']
@@ -761,7 +634,7 @@ def fit(image,
     '''
     Known issue - for poor images, some sources may be too close to boundary, remove this
     '''
-    if not return_fwhm:
+    if not return_fwhm and not no_print:
         logger.info('Image cutout size: (%.f,%.f) (%.f,%.f)' % ((lower_x_bound,upper_x_bound,lower_y_bound,upper_y_bound)))
 
     sources = sources[sources.x_pix < image.shape[1] - upper_x_bound]
@@ -769,25 +642,30 @@ def fit(image,
     sources = sources[sources.y_pix < image.shape[0] - upper_y_bound]
     sources = sources[sources.y_pix > lower_y_bound]
 
-    logger.info('Fitting PSF to %d sources' % len(sources))
+    if not no_print:
+        logger.info('Fitting PSF to %d sources' % len(sources))
 
     for n  in range(len(sources.index)):
-        if return_fwhm:
-            print('\rFitting PSF to source: %d / %d' % (n+1,len(sources)), end = '',flush=False)
+        if not return_fwhm and not no_print:
+            print('\rFitting PSF to source: %d / %d' % (n+1,len(sources)), end = '')
+
         try:
 
             idx = list(sources.index)[n]
 
 
-            source =   image[int(sources.y_pix[idx])-lower_y_bound: int(sources.y_pix[idx]) + upper_y_bound,
-                             int(sources.x_pix[idx])-lower_x_bound: int(sources.x_pix[idx]) + upper_x_bound]
+            source_base =   image[int(sources.y_pix[idx]-lower_y_bound): int(sources.y_pix[idx] + upper_y_bound),
+                                  int(sources.x_pix[idx]-lower_x_bound): int(sources.x_pix[idx] + upper_x_bound)]
 
-            if source.shape != (int(2*syntax['scale']),int(2*syntax['scale'])):
+            if source_base.shape != (int(2*syntax['scale']),int(2*syntax['scale'])):
+                print('not right shape')
 
                 bkg_median = np.nan
                 H = np.nan
                 H_psf_err = np.nan
-                psf_params.append((idx,bkg_median,H,H_psf_err))
+                x_fitted = np.nan
+                y_fitted = np.nan
+                psf_params.append((idx,x_fitted,y_fitted,bkg_median,H,H_psf_err))
                 continue
 
             xc = syntax['scale']
@@ -797,129 +675,173 @@ def fit(image,
             yc_global =  sources.y_pix[idx]
 
             if not rm_bkg_val:
-                source_bkg_free = source
+                source_bkg_free = source_base
                 bkg_median = 0
             else:
 
                 try:
-                    if syntax['psf_bkg_surface']:
-
-                        sigma_clip = SigmaClip(sigma=syntax['Lim_SNR'])
-                        bkg_estimator = MedianBackground()
-                        bkg = Background2D(source, (3, 3), filter_size=(5, 5),
-                                           sigma_clip=sigma_clip, bkg_estimator=bkg_estimator)
-
-
-                        surface = bkg.background
-
-                        bkg_median = np.nanmedian(bkg.background_median)
-                        source_bkg_free = source - surface
-
-                    if syntax['psf_bkg_poly']:
-
-
-                        # Fit 2D surface to close_up
-                        from astropy.modeling import models, fitting
-                        surface_function_init = models.Polynomial2D(degree=syntax['psf_bkg_poly_degree'])
-
-                        fit_surface = fitting.LevMarLSQFitter()
-
-
-                        x = np.arange(0,source.shape[0])
-                        y = np.arange(0,source.shape[0])
-                        xx,yy= np.meshgrid(x,y)
-
-                        with warnings.catch_warnings():
-                            # Ignore model linearity warning from the fitter
-                            warnings.simplefilter('ignore')
-                            surface_fit = fit_surface(surface_function_init, xx, yy, source)
-
-                        surface = surface_fit(xx,yy)
-
-                        bkg_median = np.nanmedian(surface)
-                        source_bkg_free = source - surface
-
-
-                    if syntax['psf_bkg_local']:
-
-                        pos = list(zip([xc_global],[yc_global]))
-
-                        ap , bkg = ap_phot(pos ,
-                                           image,
-                                           radius = syntax['ap_size'] * fwhm,
-                                           r_in   = syntax['r_in_size'] * fwhm,
-                                           r_out  = syntax['r_out_size'] * fwhm)
-
-                        source_bkg_free = source - ( np.ones(source.shape) * bkg)
-
-                        bkg_median = bkg[0]
+                    source_bkg_free,bkg_surface = rm_bkg(source_base,syntax,source_base.shape[1]/2,source_base.shape[0]/2)
+                    bkg_median = np.nanmedian(bkg_surface)
 
                 except Exception as e:
+                    bkg_median = np.nan
+                    H = np.nan
+                    H_psf_err = np.nan
+                    x_fitted = np.nan
+                    y_fitted = np.nan
+                    psf_params.append((idx,x_fitted,y_fitted,bkg_median,H,H_psf_err))
                     logger.exception(e)
+                    continue
 
 
-            source = source_bkg_free[int(source_bkg_free.shape[1]/2 - fitting_radius):int(source_bkg_free.shape[1]/2 + fitting_radius) ,
-                                     int(source_bkg_free.shape[0]/2 - fitting_radius):int(source_bkg_free.shape[0]/2 + fitting_radius) ]
+            source = source_bkg_free[int(0.5*source_bkg_free.shape[1] - fitting_radius):int(0.5*source_bkg_free.shape[1] + fitting_radius) ,
+                                     int(0.5*source_bkg_free.shape[0] - fitting_radius):int(0.5*source_bkg_free.shape[0] + fitting_radius) ]
 
             if source.shape != (int(2*fitting_radius),int(2*fitting_radius)):
                 bkg_median = np.nan
                 H = np.nan
                 H_psf_err = np.nan
-                psf_params.append((idx,bkg_median,H,H_psf_err))
+                x_fitted = np.nan
+                y_fitted = np.nan
+                psf_params.append((idx,x_fitted,y_fitted,bkg_median,H,H_psf_err))
                 continue
 
             if np.sum(np.isnan(source)) == len(source):
-                logger.warning('all nan image')
+                bkg_median = np.nan
+                H = np.nan
+                H_psf_err = np.nan
+                x_fitted = np.nan
+                y_fitted = np.nan
+                psf_params.append((idx,x_fitted,y_fitted,bkg_median,H,H_psf_err))
+
                 continue
 
 
             if hold_pos:
-                dx = 1e-3
-                dy = 1e-3
+                dx = 1e-6
+                dy = 1e-6
             else:
                 dx = syntax['dx']
                 dy = syntax['dy']
+            # if not return_fwhm:
+            #     dx = syntax['dx']
+            #     dy = syntax['catalogdy']
+
 
             x_slice = np.arange(0,2*fitting_radius)
             xx_sl,yy_sl= np.meshgrid(x_slice,x_slice)
 
-            if return_fwhm:
-                logger.info('Fitting gaussian to source to get FWHM')
+            if return_fwhm :
+                if not no_print:
+                    logger.info('Fitting gaussian to source to get FWHM')
 
                 pars = lmfit.Parameters()
-                pars.add('A',value = np.nanmax(source),min = 1e-5)
-                pars.add('x0',value = source.shape[0]/2)
-                pars.add('y0',value = source.shape[0]/2)
-                pars.add('sigma',value = fwhm / 2*np.sqrt(2 * np.log(2)) )
+                pars.add('A',value = np.nanmax(source),min = 0)
+                pars.add('x0',value = source.shape[1]/2,min = 0.5*source.shape[1] - dx,max = 0.5*source.shape[1] + dx)
+                pars.add('y0',value = source.shape[0]/2,min = 0.5*source.shape[0] - dy,max = 0.5*source.shape[0] + dy)
 
-                def residual(p):
-                    p = p.valuesdict()
-                    return (source - gauss_2d((xx_sl,yy_sl),p['x0'],p['y0'],0,p['A'],p['sigma']).reshape(source.shape)).flatten()
+                # print(pars)
+
+                if syntax['use_moffat']:
+                    pars.add('alpha',value = syntax['image_params']['alpha'],
+                             min = 0,max = 25)
+
+                    pars.add('beta',value = syntax['image_params']['beta'],
+                             min = 0,
+                             vary = syntax['vary_moff_beta']  )
+
+                else:
+                    pars.add('sigma',value = syntax['image_params']['sigma'],
+                             min = 0,
+                             max = gauss_fwhm2sigma(syntax['max_fit_fwhm']) )
+
+                if syntax['use_moffat']:
+                    fitting_model_fwhm = moffat_fwhm
+                    def residual(p):
+                        p = p.valuesdict()
+                        return (source  - moffat_2d((xx_sl,yy_sl),p['x0'],p['y0'],0,p['A'],dict(alpha=p['alpha'],beta=p['beta'])).reshape(source.shape)).flatten()
+                else:
+                    fitting_model_fwhm = gauss_sigma2fwhm
+                    def residual(p):
+                        p = p.valuesdict()
+                        return (source - gauss_2d((xx_sl,yy_sl),p['x0'],p['y0'],0,p['A'],dict(sigma=p['sigma'])).reshape(source.shape)).flatten()
 
                 mini = lmfit.Minimizer(residual, pars,nan_policy = 'omit')
+                result = mini.minimize(method = 'least_squares')
 
-                result = mini.minimize(method = 'leastsq')
+                xc = result.params['x0'].value
+                yc = result.params['y0'].value
 
-                source_fwhm = result.params['sigma'].value  * 2*np.sqrt(2 * np.log(2))
+                if syntax['use_moffat']:
+                    target_PSF_FWHM = fitting_model_fwhm(dict(alpha=result.params['alpha'],beta=result.params['beta']))
+                else:
+                    target_PSF_FWHM = fitting_model_fwhm(dict(sigma=result.params['sigma']))
 
-                logger.info('Target FWHM: %.3f' % source_fwhm)
+
+                if not no_print:
+                    logger.info('Target FWHM: %.3f' % target_PSF_FWHM)
+
+                xc_global = xc - 0.5*source.shape[1] + sources.x_pix[idx]
+                yc_global = yc - 0.5*source.shape[0] + sources.y_pix[idx]
+
+
+                #  shift image and increase shize of image by shift
+
+                # xc_global = sources.x_pix[idx]
+                # yc_global = sources.y_pix[idx]
+
+                source_base =   image[int(yc_global-lower_y_bound): int(yc_global + upper_y_bound),
+                                      int(xc_global-lower_x_bound): int(xc_global + upper_x_bound)]
+
+                source_bkg_free,bkg_surface = rm_bkg(source_base,syntax,source_bkg_free.shape[0]/2,source_bkg_free.shape[1]/2)
+
+                bkg_median = np.nanmedian(bkg_surface)
+
+                source = source_bkg_free[int(source_bkg_free.shape[0]/2 - fitting_radius):int(source_bkg_free.shape[0]/2 + fitting_radius) ,
+                                         int(source_bkg_free.shape[1]/2 - fitting_radius):int(source_bkg_free.shape[1]/2 + fitting_radius) ]
+
+# =============================================================================
+#
+# =============================================================================
 
             try:
 
+                '''
+                Fit and subtract PSF model
+                '''
+
+                if hold_pos:
+                    dx = 1e-6
+                    dy = 1e-6
+                else:
+                    dx = syntax['dx']
+                    dy = syntax['dy']
+
                 pars = lmfit.Parameters()
 
-                pars.add('A', value = np.nanmax(source)*0.75,min = 1e-5)
-                pars.add('x0',value = 0.5*residual_table.shape[0],min = 0.5*residual_table.shape[0]-dx,max = 0.5*residual_table.shape[0]+dx)
-                pars.add('y0',value = 0.5*residual_table.shape[1],min = 0.5*residual_table.shape[1]-dy,max = 0.5*residual_table.shape[1]+dy)
+                pars.add('A', value = np.nanmax(source)*0.75,min = 0)
+
+                pars.add('x0',value = 0.5*residual_table.shape[1],
+                         min = 0.5*residual_table.shape[1]-dx,
+                         max = 0.5*residual_table.shape[1]+dx)
+
+                pars.add('y0',value = 0.5*residual_table.shape[0],
+                         min = 0.5*residual_table.shape[0]-dy,
+                         max = 0.5*residual_table.shape[0]+dy)
+
 
                 def residual(p):
                     p = p.valuesdict()
                     res = ((source - build_psf(p['x0'],p['y0'],0,p['A'],residual_table,slice_scale = source.shape[0]/2)))
                     return res.flatten()
 
-                mini = lmfit.Minimizer(residual,pars,nan_policy = 'omit',scale_covar=True)
 
-                result = mini.minimize(method = 'leastsq')
+                mini = lmfit.Minimizer(residual,
+                                       pars,
+                                       nan_policy = 'omit',
+                                       scale_covar=True)
+
+                result = mini.minimize(method = 'least_squares')
 
                 xc = result.params['x0'].value
 
@@ -929,33 +851,29 @@ def fit(image,
 
                 H_psf_err = result.params['A'].stderr
 
+                x_fitted = xc -0.5*residual_table.shape[1] + xc_global
+                y_fitted = yc -0.5*residual_table.shape[1] + yc_global
+
+                # print(H,bkg_median)
+
+                if syntax['remove_sat']:
+
+                    if H+bkg_median >= syntax['sat_lvl']:
+                        # print('here')
+                        bkg_median = np.nan
+                        H = np.nan
+                        H_psf_err = np.nan
+                        psf_params.append((idx,x_fitted,y_fitted,bkg_median,H,H_psf_err))
+                        continue
 
 
             except Exception as e:
                 logger.exception(e)
+                bkg_median = np.nan
+                H = np.nan
+                H_psf_err = np.nan
+                psf_params.append((idx,x_fitted,y_fitted,bkg_median,H,H_psf_err))
                 continue
-
-            best = 2
-            cf68 = [1,3]
-
-            # This is temporary
-            H_psf_err = 0
-
-            '''
-            Work in progress getting error output to work
-            '''
-
-            if syntax['use_confinterval']:
-                try:
-                    error_params = lmfit.conf_interval(mini, result,sigmas=[1, 2],verbose=False)
-
-                    H_psf_err_low = error_params['A'][cf68[0]][1] - error_params['A'][best][1]
-                    H_psf_err_high = error_params['A'][best][1] - error_params['A'][cf68[1]][1]
-                    H_psf_err = [H_psf_err_low,H_psf_err_high]
-
-                except:
-                    syntax['use_covarience'] = True
-                    pass
 
             if syntax['use_covarience']:
 
@@ -965,19 +883,20 @@ def fit(image,
                 logger.warning('Error not computed')
                 H_psf_err = 0
 
-            psf_params.append((idx,bkg_median,H,H_psf_err))
+            psf_params.append((idx,x_fitted,y_fitted,bkg_median,H,H_psf_err))
 
             if return_subtraction_image:
 
                 try:
 
                     image_section = image[int(yc_global -  syntax['scale']): int(yc_global + syntax['scale']),
-                                          int(xc_global -  syntax['scale']): int(xc_global + syntax['scale'])].copy()
+                                          int(xc_global -  syntax['scale']): int(xc_global + syntax['scale'])]
 
                     image[int(yc_global  - syntax['scale']): int(yc_global +  syntax['scale']),
                           int(xc_global  - syntax['scale']): int(xc_global +  syntax['scale'])] =  image_section - build_psf(xc , yc, 0, H, residual_table)
 
                     image_section_subtraction = image_section - build_psf(xc , yc, 0, H, residual_table)
+
 
                     fig, ax1, = plt.subplots()
 
@@ -1007,17 +926,17 @@ def fit(image,
                                       vmin = vmin,
                                       vmax = vmax,
                                       norm = norm,
-                                     origin = 'lower',
-                                     cmap = 'gist_heat',
+                                      origin = 'lower',
+                                      cmap = 'gist_heat',
                                      interpolation = 'nearest')
 
                     ax_after.imshow(image_section_subtraction,
                                      vmin = vmin,
                                      vmax = vmax,
                                      norm = norm,
-                                    origin = 'lower',
-                                    cmap = 'gist_heat',
-                                    interpolation = 'nearest')
+                                     origin = 'upper',
+                                     cmap = 'gist_heat',
+                                     interpolation = 'nearest')
 
                     ax_after.axis('off')
                     ax_before.axis('off')
@@ -1039,73 +958,175 @@ def fit(image,
 
 
             if syntax['show_residuals'] or show_plot == True or save_plot == True:
-                fig_source_residual = plt.figure(figsize = (14,8),facecolor='w', edgecolor='k')
-                gs = fig_source_residual.add_gridspec(2, 5)
+                fig = plt.figure(figsize = set_size(500,aspect =0.5))
                 try:
+                    from astropy.visualization import  ZScaleInterval
 
-                    from matplotlib.patches import Circle
+                    vmin,vmax = (ZScaleInterval(nsamples = 1500)).get_limits(source_base)
 
-                    from mpl_toolkits.axes_grid1 import make_axes_locatable
-                    from mpl_toolkits import mplot3d
+                    h, w = source_bkg_free.shape
 
-
-                    ax1 = fig_source_residual.add_subplot(gs[0, 0])
-                    ax2 = fig_source_residual.add_subplot(gs[1,0], sharex=ax1)
-                    ax3 = fig_source_residual.add_subplot(gs[:,-4:-2], projection='3d')
-                    ax4 = fig_source_residual.add_subplot(gs[:,-2:], projection='3d')
-
-                    ax1.imshow(source_bkg_free)
-                    ax1.scatter(xc,yc,label = 'Best fit',
-                                marker = '*',
-                                color = 'red',
-                                alpha = 0.5)
-
-                    ax2.imshow(source_bkg_free - build_psf(xc,yc,0,H,residual_table))
-                    ax2.scatter(xc,yc,label = 'Best fit',
-                                marker = '*',
-                                color = 'red',
-                                alpha = 0.5)
-
-
-                    x  = np.linspace(0, 2*syntax['scale'], 2*syntax['scale'])
-                    y  = np.linspace(0, 2*syntax['scale'], 2*syntax['scale'])
+                    x  = np.linspace(0, int(2*syntax['scale']), int(2*syntax['scale']))
+                    y  = np.linspace(0, int(2*syntax['scale']), int(2*syntax['scale']))
 
                     X, Y = np.meshgrid(x, y)
 
-                    ax3.plot_surface(X, Y,source_bkg_free,
-                                     cmap='viridis',rstride=1, cstride=1)
+                    ncols = 6
+                    nrows = 3
+
+                    heights = [1,1,0.75]
+                    widths = [1,1,0.75,1,1,0.75]
+
+                    grid = GridSpec(nrows, ncols ,wspace=0.5, hspace=0.5,
+                                    height_ratios=heights,width_ratios = widths
+                                    )
+                    # grid = GridSpec(nrows, ncols ,wspace=0.3, hspace=0.5)
 
 
-                    ax4.plot_surface(X, Y,source_bkg_free - build_psf( xc,yc,0,H ,residual_table),
-                                     cmap='viridis',
-                                     rstride=1,
-                                     cstride=1,
-                                     edgecolor='none')
 
-                    ax3.set_zlabel("Amplitude")
-                    ax4.set_zlabel("Amplitude")
+                    ax1   = fig.add_subplot(grid[0:2, 0:2])
+                    ax1_B = fig.add_subplot(grid[2, 0:2])
+                    ax1_R = fig.add_subplot(grid[0:2, 2])
 
-                    ax1.text(1.1, 0.5,'Image',
-                             horizontalalignment='center',
-                             verticalalignment='center',
-                             rotation = 270,
-                             transform = ax1.transAxes)
+                    ax2 = fig.add_subplot(grid[0:2, 3:5])
 
-                    ax2.text(1.1, 0.5,'Residual Image',
-                             horizontalalignment='center',
-                             verticalalignment='center',
-                             rotation = 270,
-                             transform = ax2.transAxes)
+                    ax2_B = fig.add_subplot(grid[2, 3:5])
+                    ax2_R = fig.add_subplot(grid[0:2, 5])
 
-                    for ax in [ax1,ax2,ax3,ax4]:
-                        ax.set_xlabel('X pixel')
-                        ax.set_ylabel('Y pixel')
 
-                    plt.tight_layout()
+                    ax1_B.set_xlabel('X Pixel')
+                    ax2_B.set_xlabel('X Pixel')
+
+                    ax1.set_ylabel('Y Pixel')
+
+                    # ax1.set_title('H:%d' % (H+bkg_median))
+                    # ax2.set_ylabel('Y Pixel')
+
+
+
+
+                    ax1_R.yaxis.tick_right()
+                    ax2_R.yaxis.tick_right()
+
+
+                    ax1.xaxis.tick_top()
+                    ax2.xaxis.tick_top()
+
+                    ax2.axes.yaxis.set_ticklabels([])
+                    # ax2_R.axes.yaxis.set_ticklabels([])
+
+
+                    bbox=ax1_R.get_position()
+                    offset= -0.04
+                    ax1_R.set_position([bbox.x0+ offset, bbox.y0 , bbox.x1-bbox.x0, bbox.y1 - bbox.y0])
+
+                    bbox=ax2_R.get_position()
+                    offset= -0.04
+                    ax2_R.set_position([bbox.x0+ offset, bbox.y0 , bbox.x1-bbox.x0, bbox.y1 - bbox.y0])
+
+                    bbox=ax1_B.get_position()
+                    offset= 0.08
+                    ax1_B.set_position([bbox.x0, bbox.y0+ offset , bbox.x1-bbox.x0, bbox.y1 - bbox.y0])
+
+                    bbox=ax2_B.get_position()
+                    offset= 0.08
+                    ax2_B.set_position([bbox.x0, bbox.y0+ offset , bbox.x1-bbox.x0, bbox.y1 - bbox.y0])
+
+
+                    ax1.imshow(source_base,
+                               origin = 'lower',
+                               aspect="auto",
+                               vmin = vmin,
+                               vmax = vmax,
+                               interpolation = 'nearest'
+                               )
+
+                    ax1.scatter(xc,yc,label = 'Best fit',
+                                marker = '+',
+                                color = 'red',
+                                s = 20)
+
+
+                    ax1_R.plot(source_base[:,w//2],Y[:,w//2],marker = 'o',color = 'blue')
+                    ax1_B.plot(X[h//2,:],source_base[h//2,:],marker = 'o',color = 'blue')
+
+                    # include surface
+                    ax1_R.plot(bkg_surface[:,w//2],Y[:,w//2],marker = 's',color = 'red')
+                    ax1_B.plot(X[h//2,:],bkg_surface[h//2,:],marker = 's',color = 'red')
+
+                    fitted_source = build_psf(xc,yc,0,H,residual_table)
+
+                    # include fitted_source
+                    ax1_R.plot((bkg_surface+fitted_source)[:,w//2],Y[:,w//2],marker = 's',color = 'green')
+                    ax1_B.plot(X[h//2,:],(bkg_surface+fitted_source)[h//2,:],marker = 's',color = 'green')
+
+                    '''
+                    Subtracted image
+                    '''
+
+                    import matplotlib.ticker as ticker
+
+                    ax1_B_yticks = np.array(ax1_B.get_yticks())
+                    scale = order_shift(abs(ax1_B_yticks))
+                    ticks = ticker.FuncFormatter(lambda x, pos: '{0:g}'.format(x/scale))
+
+                    ax1_B.set_ylabel('$10^{%d}$ counts' % np.log10(order_shift(abs(ax1_B_yticks))))
+                    ax1_B.yaxis.set_major_formatter(ticks)
+
+                    ax1_R_yticks = np.array(ax1_R.get_xticks())
+                    scale = order_shift(abs(ax1_R_yticks))
+                    ticks = ticker.FuncFormatter(lambda x, pos: '{0:g}'.format(x/scale))
+
+                    ax1_R.set_xlabel('$10^{%d}$ counts' % np.log10(order_shift(abs(ax1_R_yticks))))
+                    ax1_R.xaxis.set_major_formatter(ticks)
+
+                    ax2_B_yticks = np.array(ax2_B.get_yticks())
+                    scale = order_shift(abs(ax2_B_yticks))
+                    ticks = ticker.FuncFormatter(lambda x, pos: '{0:g}'.format(x/scale))
+
+                    ax2_B.set_ylabel('$10^{%d}$ counts' % np.log10(order_shift(abs(ax2_B_yticks))))
+                    ax2_B.yaxis.set_major_formatter(ticks)
+
+                    ax2_R_yticks = np.array(ax2_R.get_xticks())
+                    scale = order_shift(abs(ax2_R_yticks))
+                    ticks = ticker.FuncFormatter(lambda x, pos: '{0:g}'.format(x/scale))
+
+                    ax2_R.set_xlabel('$10^{%d}$ counts' % np.log10(order_shift(abs(ax2_R_yticks))))
+                    ax2_R.xaxis.set_major_formatter(ticks)
+
+                    subtracted_image = source_bkg_free - fitted_source + bkg_surface
+
+                    ax2.imshow(subtracted_image,
+                               origin = 'lower',
+                               aspect="auto",
+                               vmin = vmin,
+                               vmax = vmax,
+                               interpolation = 'nearest'
+                               )
+
+                    ax2.scatter(xc,yc,label = 'Best fit',
+                                marker = '+',
+                                color = 'red',
+                                s = 20)
+
+                    ax2_R.plot(subtracted_image[:,w//2],Y[:,w//2],marker = 'o',color = 'blue')
+                    ax2_B.plot(X[h//2,:],subtracted_image[h//2,:],marker = 'o',color = 'blue')
+
+                    # Show surface
+                    ax2_R.plot(bkg_surface[:,w//2],Y[:,w//2],marker = 's',color = 'red')
+                    ax2_B.plot(X[h//2,:],bkg_surface[h//2,:],marker = 's',color = 'red')
+
+                    # include fitted_source
+                    ax2_R.plot((bkg_surface+fitted_source)[:,w//2],Y[:,w//2],marker = 's',color = 'green')
+                    ax2_B.plot(X[h//2,:],(bkg_surface+fitted_source)[h//2,:],marker = 's',color = 'green')
+
+
 
                     if save_plot == True:
-                        fig_source_residual.savefig(syntax['write_dir']+'target_psf_'+fname+'.pdf',
-                                                    format = 'pdf')
+                        fig.savefig(syntax['write_dir']+'target_psf_'+fname+'.pdf',
+                                                    format = 'pdf',
+                                                    # bbox_inches='tight'
+                                                    )
 
                         logger.info('Image %s / %s saved' % (str(n+1),str(len(sources.index)) ))
                     else:
@@ -1114,7 +1135,7 @@ def fit(image,
 
                         plt.savefig(syntax['write_dir']+'psf_subtractions/'+'psf_subtraction_{}.png'.format(int(n)))
 
-                    plt.close(fig_source_residual)
+                    plt.close(fig)
 
                 except Exception as e:
                     logger.exception(e)
@@ -1128,17 +1149,22 @@ def fit(image,
              bkg_median = np.nan
              H = np.nan
              H_psf_err = np.nan
-             psf_params.append((idx,bkg_median,H,H_psf_err))
-             plt.close(fig_source_residual)
+             psf_params.append((idx,x_fitted,y_fitted,bkg_median,H,H_psf_err))
+
              continue
 
-    new_df =  pd.DataFrame(psf_params,columns = ('idx','bkg','H_psf','H_psf_err'),index = sources.index)
+
+    new_df =  pd.DataFrame(psf_params,columns = ('idx','x_fitted','y_fitted','bkg','H_psf','H_psf_err'),index = sources.index)
 
     if return_fwhm:
-        new_df['target_fwhm'] = round(source_fwhm,3)
-    print('')
+        new_df['target_fwhm'] = target_PSF_FWHM,
+        # new_df['target_fwhm_err'] =source_fwhm_err
+    elif not no_print:
+        print('  ')
+    if not return_psf_model:
 
-    return pd.concat([sources,new_df],axis = 1),build_psf
+
+        return pd.concat([sources,new_df],axis = 1),build_psf
 
 
 
@@ -1155,7 +1181,6 @@ def do(df,residual,syntax,fwhm):
         from photutils import CircularAperture
         from photutils import aperture_photometry
         from scipy.integrate import dblquad
-        import sys,os
         import logging
 
 
@@ -1165,21 +1190,27 @@ def do(df,residual,syntax,fwhm):
         yc = syntax['scale']
 
         # Integration radius
-        int_scale = syntax['image_radius']
-#        int_scale = syntax['ap_size'] * fwhm
+        # int_scale = 2*syntax['image_radius']
+        int_scale = syntax['ap_size'] * fwhm
 
         int_range_x = [xc - int_scale , xc + int_scale]
         int_range_y = [yc - int_scale , yc + int_scale]
 
-        sigma  = fwhm/(2*np.sqrt(2*np.log(2)))
 
         # Core Gaussian component with height 1 and sigma value sigma
-        core= lambda y, x: gauss_2d((x,y),syntax['scale'],syntax['scale'],0,1,sigma)
+        if syntax['use_moffat']:
+            core= lambda y, x: moffat_2d((x,y),syntax['scale'],syntax['scale'],0,1,syntax['image_params'])
+        else:
+            core= lambda y, x: gauss_2d((x,y),syntax['scale'],syntax['scale'],0,1,syntax['image_params'])
+
         core_int = dblquad(core, int_range_y[0],int_range_y[1],lambda x:int_range_x[0],lambda x:int_range_x[1])[0]
+
+        # core_int = 2*np.pi*sigma**2
+
 
         # Aperture Photometry over residual
         apertures = CircularAperture((syntax['scale'],syntax['scale']), r=int_scale)
-        phot_table = aperture_photometry(residual, apertures,method='subpixel',subpixels=5)
+        phot_table = aperture_photometry(residual, apertures,method='subpixel',subpixels=4)
 
         phot_table['aperture_sum'].info.format = '%.8g'
         residual_int = phot_table[0]
@@ -1196,13 +1227,11 @@ def do(df,residual,syntax,fwhm):
         psf_int     = df.H_psf     * sudo_psf
         psf_int_err = df.H_psf_err * sudo_psf
 
-        df['psf_counts'] = psf_int.values
+        df['psf_counts']     = psf_int.values
         df['psf_counts_err'] = psf_int_err.values
 
     except Exception as e:
-        exc_type, exc_oba, exc_tb = sys.exc_info()
-        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-        logger.info(exc_type, fname, exc_tb.tb_lineno,e)
+        logger.exception(e)
         df = np.nan
 
     return df,syntax

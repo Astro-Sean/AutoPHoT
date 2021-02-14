@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="autophot",
-    version="0.1.1",
+    version="0.2",
     author="Sean Brennan",
     author_email="sean.brennan2@ucdconnect.ie",
     description="Automated Photometry of Transients",

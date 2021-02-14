@@ -16,7 +16,6 @@ def run_autophot(syntax):
     from autophot.packages.call_datacheck import checkteledata
     from autophot.packages.main import main
 
-
     import os
     import sys
     import pathlib
@@ -37,9 +36,9 @@ def run_autophot(syntax):
     wrong_file_removed = 0
 
     def border_msg(msg):
-        row = len(msg)+2
+        row = len(msg)
         h = ''.join(['+'] + ['-' *row] + ['+'])
-        result= h + '\n'"| "+msg+" |"'\n' + h
+        result= h + '\n'"|"+msg+"|"'\n' + h
         print('\n'+result)
 
     #==================================================================
@@ -65,12 +64,13 @@ def run_autophot(syntax):
         # Search for .fits files with template or subtraction in it
         for root, dirs, files in os.walk(syntax['fits_dir']):
             for fname in files:
-                if fname.endswith((".fits",'.fit','.fts')):
+                if fname.endswith((".fits",'.fit','.fts','fits.fz')):
                     if 'templates' not in root and 'template' not in syntax['fits_dir']:
                         if 'template' not in fname and 'template' not in syntax['fits_dir'] :
                             if 'subtraction' not in fname:
                                 if 'WCS' not in fname:
                                     flist.append(os.path.join(root, fname))
+    files_completed = False
 
     if syntax['restart']:
 
@@ -83,12 +83,13 @@ def run_autophot(syntax):
 
         for i in flist:
             path,file = os.path.split(i)
+
             clean_path = path + '/' + file
             flist_before.append(i.replace('_APT','').replace(' ','_').replace('_'+syntax['outdir_name'],''))
 
         len_before = len(flist)
 
-        print('\n* Restarting - checking for files in %s \n' % (syntax['fits_dir']+'_'+syntax['outdir_name']).replace(' ',''))
+        print('\nRestarting - checking for files already completed in:\n%s' % (syntax['fits_dir']+'_'+syntax['outdir_name']).replace(' ',''))
 
         flist_restart = []
         ending = '_'+syntax['outdir_name']
@@ -120,9 +121,11 @@ def run_autophot(syntax):
 
             len_after = len(flist)
 
-            print('\nTotal Files: %s \n' % str(len_before))
+            print('\nTotal Files: %d' % len_before)
 
-            print('\nFiles already done: %s \n' % ( str(len_before - len_after)))
+            files_completed = len_before - len_after
+
+            print('\nFiles already done: %d' %  files_completed)
 
             files_removed += len_before - len_after
 
@@ -149,7 +152,7 @@ def run_autophot(syntax):
         fname = str(target) + '_RAD_' + str(float(syntax['radius']))
 
         if not syntax['catalog_custom_fpath']:
-            logger.critical('Custoim catalog selected but "catalog_custom_fpath" not defined')
+            logger.critical('Custom catalog selected but "catalog_custom_fpath" not defined')
             exit()
         else:
             fname = syntax['catalog_custom_fpath']
@@ -217,7 +220,9 @@ def run_autophot(syntax):
 # Checking that selected catalog has appropiate filters - if not remove
 # =============================================================================
 
-    print('\n> Checking: Filters')
+    print('\nChecking: Filters')
+
+    no_filter_list = []
 
     for name in flist:
 
@@ -260,38 +265,37 @@ def run_autophot(syntax):
                 if tele_syntax[tele][inst_key][inst][filter_header] not in list(headinfo.keys()):
                     old_n = int(re.findall(r"[-+]?\d*\.\d+|\d+", filter_header)[0])
                     filter_header = filter_header.replace(str(old_n),str(old_n+1))
+
                 elif tele_syntax[tele][inst_key][inst][filter_header].lower() == 'clear':
+                    # filter_header = filter_header.replace(str(old_n),str(old_n+1))
                     continue
                 else:
                     break
             try:
                 fits_filter = headinfo[tele_syntax[tele][inst_key][inst][filter_header]]
-            except:
+            except Exception as e:
+                exc_type, exc_obj, exc_tb = sys.exc_info()
+                fname1 = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                print(exc_type, fname1, exc_tb.tb_lineno,e)
+                print('''***Filter filter header not found***''' )
                 fits_filter = 'no_filter'
-
-            # If filter keword is clear, set to 'force_filter', usually r
-            if fits_filter.lower() == 'clear':
-                fits_filter = syntax['force_filter']
 
             try:
                 filter_name = tele_syntax[tele][inst_key][inst][str(fits_filter)]
-
             except:
                 filter_name = str(fits_filter)
-            try:
+
+            if 'IMAGETYP' in  headinfo:
                 if headinfo['IMAGETYP'].lower() in ['bias','zero','flat']:
                     wrong_file_removed+=1
                     files_removed+=1
-
                     continue
-            except:
-                pass
+
 
             if not filter_name in available_filters:
-
                 files_removed+=1
                 filter_removed+=1
-
+                no_filter_list.append(filter_name)
                 continue
 
             if syntax['select_filter']:
@@ -299,7 +303,7 @@ def run_autophot(syntax):
                     if str(tele_syntax[tele][inst_key][inst][str(fits_filter)]) not in syntax['do_filter']:
                         files_removed+=1
                         filter_removed+=1
-                        # print('\n* Removed file: %s: Filter not selected *\n' % str(fname))
+                        no_filter_list.append(filter_name)
                         continue
                 except:
                     files_removed+=1
@@ -312,19 +316,25 @@ def run_autophot(syntax):
             exc_type, exc_obj, exc_tb = sys.exc_info()
             fname1 = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
             print(exc_type, fname1, exc_tb.tb_lineno,e)
+
+            print([tele,inst_key,inst])
             continue
 
     flist = flist_new
 
-    print('\nFiles removed - Wrong Image: %s\n' % wrong_file_removed)
+    print('\nFiles removed - Wrong Image Type: %d' % wrong_file_removed)
 
-    print('\nFiles removed - No filter: %s\n' % filter_removed)
+    print('\nFiles removed - No/Wrong filter(s): %d\nFilters not included: %s\n' % (filter_removed,str(list(set(no_filter_list))).replace("'","")))
 
-    print('\nFiles removed - Total: %s\n' % files_removed)
+    print('\nFiles removed: %d' % files_removed)
+
+    if files_completed:
+        print('\nFiles already done: %d' % files_completed)
+
 
     if len(flist) > 500:
-        ans = str(input('> More than 500 .fits files [%s] -  do you want to continue? [y]: ' % len(flist)) or 'y')
-        if  ans != 'y':
+        ans = str(input('> More than 500 .fits files [%s] -  do you want to continue? [[y]/n]: ' % len(flist)) or 'y')
+        if  ans == 'n':
             raise Exception('Exited AutoPHoT - file number size issue')
 
 # =============================================================================
@@ -332,34 +342,59 @@ def run_autophot(syntax):
 # =============================================================================
 
     if syntax['method'] == 'sp':
+
+        # single process output list
         sp_output = []
         n=0
         for i in (flist):
 
             n+=1
             border_msg('File: %s / %s' % (n,len(flist)))
+
+            # Enter into AutoPhOT
             out = main(TNS_response,syntax,i)
+
+            # Append to output list
             sp_output.append(out)
 
-        with open(str(syntax['outcsv_name'])+'.csv', 'a'):
-                pass
+        # Create new output csv file
+        with open(str(syntax['outcsv_name'])+'.csv', 'a'): pass
 
+        # Successful files
         sp_output_data = [x[0] for x in sp_output if x[0] is not None]
 
+        # Files that failed
         output_total_fail = [x[1] for x in sp_output if x[0] is None]
 
         print('\n---')
         print('\nTotal failure :',output_total_fail)
 
+        '''
+        Dataframe of output parameters from recent instance of AutoPhOT
+
+        - will be concatinated with any previous excuted output files
+        '''
         new_entry = pd.DataFrame(sp_output_data)
         new_entry = new_entry.applymap(lambda x: x if isinstance(x, list) else x )
+
+
+
+        '''
+        Open any previous found output files and try to update it
+
+        otherwise ignore any previous files
+        '''
 
         try:
             data = pd.read_csv(str(syntax['outcsv_name']+'.csv'),error_bad_lines=False)
             update_data = pd.concat([data,new_entry],axis = 0,sort = False,ignore_index = True)
-        except pd.io.common.EmptyDataError:
+        except:
             update_data = new_entry
-            pass
+
+        '''
+        Write data to new file
+        '''
+
         try:
             update_data.to_csv(str(syntax['outcsv_name']+'.csv'),index = False)
         except Exception as e:
@@ -369,6 +404,7 @@ def run_autophot(syntax):
             print('CANNOT UPDATE OUTPUT CSV')
 
         print('\nDONE')
+
         return
 
 # =============================================================================
@@ -434,8 +470,8 @@ def run_autophot(syntax):
             mp_output_data = [x[0] for x in mp_output if x[0] is not None]
 
             output_total_fail = [[x[1] for x in mp_output if x[0] is None]]
-            print()
-            print('Total failure :',output_total_fail)
+
+            print('\nTotal failure :',output_total_fail)
 
             new_entry = pd.DataFrame(mp_output_data)
             new_entry = new_entry.applymap(lambda x: x if isinstance(x, list) else x )
@@ -446,6 +482,8 @@ def run_autophot(syntax):
             except pd.io.common.EmptyDataError:
                 update_data = new_entry
                 pass
+
+
             try:
                 update_data.to_csv(str(syntax['outcsv_name']+'.csv'),index = False)
             except Exception as e:

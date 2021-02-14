@@ -44,15 +44,25 @@ class yaml_syntax(object):
     def update_var(self,tele,inst_key,inst,key,new_val):
 
         import yaml
+        import copy
+
         doc = {key:new_val}
 
         with open(self.filepath,'r') as yamlfile:
 
-            cur_yaml = yaml.safe_load(yamlfile)
 
-            cur_yaml[tele][inst_key][inst].update(doc)
+            cur_yaml = yaml.safe_load(yamlfile)
+            cur_yaml_backup = copy.deepcopy(cur_yaml)
+
+            try:
+
+                cur_yaml[tele][inst_key][inst].update(doc)
+            except:
+                cur_yaml = cur_yaml_backup
+
 
         with open(self.filepath,'w+') as yamlfile:
+
             yaml.safe_dump(cur_yaml, yamlfile,default_flow_style=False)
 
 
