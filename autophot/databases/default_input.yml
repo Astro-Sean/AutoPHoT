@@ -249,7 +249,7 @@ AutoPhOT_input:
   save_subtraction_quicklook: True
   adjust_SN_loc: True
 
-  do_ap_on_sub: True
+  do_ap_on_sub: False
   #====================================
   # Source Detection
   #=====================================
