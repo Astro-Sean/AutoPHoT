@@ -1,7 +1,6 @@
 <p align="center">
   <img src=https://github.com/Astro-Sean/autophot/blob/master/logo.png >
 </p>
-
 <div align="center">
 
 [![Anaconda-Server Badge](https://anaconda.org/astro-sean/autophot/badges/version.svg)](https://anaconda.org/astro-sean/autophot) [![Anaconda-Server Badge](https://anaconda.org/astro-sean/autophot/badges/latest_release_date.svg)](https://anaconda.org/astro-sean/autophot) [![Anaconda-Server Badge](https://anaconda.org/astro-sean/autophot/badges/license.svg)](https://anaconda.org/astro-sean/autophot) [![Anaconda-Server Badge](https://anaconda.org/astro-sean/autophot/badges/downloads.svg)](https://anaconda.org/astro-sean/autophot ) [![Anaconda-Server Badge](https://anaconda.org/astro-sean/autophot/badges/installer/conda.svg)](https://conda.anaconda.org/astro-sean)
@@ -10,22 +9,21 @@
 
 ## Introduction
 
-The Automated Photometry of Transients (AutoPhOT) pipeline allows for rapid and automatic analysis of image data for transient events.
+The Automated Photometry Of Transients (AutoPhOT) pipeline allows for rapid, automatic analysis of fits images for transient events.
 
-The novel pipeline is built from the ground up, based on Python3 and makes use of Astropy packages. AutoPhOT is able to handle homogenised data from different telescopes and applies techniques such as image calibration, image subtraction and novel PSF fitting in an automated and intelligent way.
+The novel pipeline is built from the ground up, based on Python3 and makes use of Astropy packages and Numpy. No istance of IRAF or Python2 software is used. AutoPhOT is able to handle homogenised data from different telescopes and applies techniques such as image calibration, image subtraction, and novel PSF fitting in an automated and intelligent way.
 
 **Project is undergoing active development. AutoPhoT will include the Python executable code presented here, an interactive website with an accompanying API. Documentation is currently being written. Feedback is welcome.
 email: sean.brennan2@ucdconnect.ie**
 
 ## Developer notes
 
- * Colour terms still in testing/development and **not** in current build
- * Currently astrometry.net, HOTPANTS and astoalign needs to be installed by USER.
+ * Colour terms still in testing/development and **not** in current build.
+ * Astrometry.net and HOTPANTS needs to be installed by User (see below for details).
  * PSF selection will look for bright isolated sources, however this can lead to sources being selected near the image boundaries which can cause large errors, especially in IR bands.
  * Telescope header script can fail on some image types - If fits image has TELESCOP and INSTRUME it should execute okay.
- * Currently no Airmass correction
- * Image subtraction is somewhat rudimentary - Pipeline can produce clean subtractions but we suggest users to check all subtractions
-
+ * Currently no airmass correction.
+ * Image subtraction is somewhat crude - pipeline can produce clean subtractions reliably but we suggest users to check all subtractions.
 
 ## Installation
 
@@ -56,13 +54,11 @@ pip install astroalign
 
 Once installed, locate the solve-field executable [default location: /usr/local/astrometry/bin/solve-field] and update (if needed) 'solve_field_exe_loc' in syntax (see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb)).
 
-**If the user trusts their WCS this step can be ignore as Astrometry.net is not used.**
+**If the user trusts their WCS this step can be ignored as Astrometry.net is not used.**
 
-
-* Image subtraction a local instance of [HOTPANTS](http://www.ascl.net/1504.004) by Andy Becker - HOTPANTS can be found [here](https://github.com/acbecker/). Once installed, locate the hotpants executable and update 'hotpants_exe_loc' in syntax see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb).
+* Image subtraction uses a local instance of [HOTPANTS](http://www.ascl.net/1504.004) by Andy Becker - HOTPANTS can be found [here](https://github.com/acbecker/). Once installed, locate the hotpants executable and update 'hotpants_exe_loc' in syntax see [here](https://github.com/Astro-Sean/autophot/blob/master/autophot_example.ipynb).
 
 **If the user has no need for image subtraction this step can be ignored.**
-
 
 **Known error with installation of HOTPANTS**
 
@@ -88,8 +84,8 @@ to every .c file.
 
 ## Referencing
 
-* As this code is very much still under development and being tested, you should be very cautious before using results from AutoPhOT in a publication - there are papers in prep that are using AutoPhOT light curves, but please speak to us first.
+* As this code is very much still under development and being tested, you should be very cautious before using results from AutoPhOT in a publication - there are papers in prep that are using AutoPhOT light curves, but please speak to us first. AutoPhoT citation to come.
 
-## Testing
+## Testing and Debugging
 
 * If you experience errors with a particular file, the most effective means of debug is to share the file with a developer for diagnostic. Once bugs have been addressed all files will be deleted. **All shared data will be kept confidential**.
