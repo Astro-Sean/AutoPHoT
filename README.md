@@ -11,7 +11,7 @@
 
 The Automated Photometry Of Transients (AutoPhOT) pipeline allows for rapid, automatic analysis of fits images for transient events.
 
-The novel pipeline is built from the ground up, based on Python3 and makes use of Astropy packages and Numpy. No istance of IRAF or Python2 software is used. AutoPhOT is able to handle homogenised data from different telescopes and applies techniques such as image calibration, image subtraction, and novel PSF fitting in an automated and intelligent way.
+The novel pipeline is built from the ground up, based on Python3 and makes extensive use of Astropy and Numpy packages. No instance of IRAF or Python2 software is used. AutoPhOT is able to handle homogenised data from different telescopes and applies techniques such as image calibration, image subtraction, and novel PSF fitting in an automated and intelligent way.
 
 **Project is undergoing active development. AutoPhoT will include the Python executable code presented here, an interactive website with an accompanying API. Documentation is currently being written. Feedback is welcome.
 email: sean.brennan2@ucdconnect.ie**
