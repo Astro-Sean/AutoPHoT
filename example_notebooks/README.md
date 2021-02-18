@@ -15,3 +15,6 @@ How to setup directory structure and HOTPANTS for image subtraction
 
 How to use your own photometric catalog
 * [add_your_catalog_example](https://github.com/Astro-Sean/autophot/blob/master/example_notebooks/add_your_catalog_example.ipynb)
+
+
+** While AutoPhOT is being developed - please contact me with comments/suggestions on how to improve user experience.**
