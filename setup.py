@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="autophot",
-    version="0.2",
+    version="0.2.1",
     author="Sean Brennan",
     author_email="sean.brennan2@ucdconnect.ie",
     description="Automated Photometry of Transients",
@@ -15,7 +15,9 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     zip_safe=False,
     python_requires='>=3',
-    package_data={'': ['databases/*.yml','example/example.fits']
+    package_data={'': ['databases/*.yml',
+                       'example/example.fits',
+                       'databases/*.mplstyle']
                   },
 
     project_urls={
