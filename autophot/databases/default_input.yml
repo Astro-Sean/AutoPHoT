@@ -11,6 +11,8 @@ AutoPhOT_input:
    # work on single file
   fname: null
 
+  fpath: null
+
   #Location of where tns queries are saved as yaml files
   object_dir: null
 
@@ -163,7 +165,7 @@ AutoPhOT_input:
   int_scale: 25
 
   # Multiplier to set close up cutout size based on image scaling
-  scale_multipler: 8
+  scale_multipler: 3
 
   #=====================================
   # Comsic Ray removal
