@@ -19,11 +19,16 @@ email: sean.brennan2@ucdconnect.ie**
 ## Developer notes
 
  * Colour terms still in testing/development and **not** in current build.
+ * Currently no airmass correction.
  * Astrometry.net and HOTPANTS needs to be installed by User (see below for details).
  * PSF selection will look for bright isolated sources, however this can lead to sources being selected near the image boundaries which can cause large errors, especially in IR bands.
  * Telescope header script can fail on some image types - If fits image has TELESCOP and INSTRUME it should execute okay.
- * Currently no airmass correction.
+
  * Image subtraction is somewhat crude - pipeline can produce clean subtractions reliably but we suggest users to check all subtractions.
+
+ <p align="center">
+   <a href="https://www.buymeacoffee.com/astrosean" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
+ </p>
 
 ## Installation
 
@@ -91,7 +96,3 @@ to every .c file.
 ## Testing and Debugging
 
 * If you experience errors with a particular file, the most effective means of debug is to share the file with a developer for diagnostic. Once bugs have been addressed all files will be deleted. **All shared data will be kept confidential**.
-
-<p align="center">
-  <a href="https://www.buymeacoffee.com/astrosean" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
-</p>
