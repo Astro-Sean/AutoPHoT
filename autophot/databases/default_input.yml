@@ -243,6 +243,7 @@ AutoPhOT_input:
   update_wcs_scale: False
   probable_detection_limit: False
   probable_detection_limt_beta: 0.95
+  try_guess_scale: False
 
   save_subtraction_quicklook: True
   adjust_SN_loc: True
