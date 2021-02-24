@@ -84,9 +84,9 @@ to every .c file.
 
 ## Referencing
 
-* As this code is very much still under development and being tested, you should be very cautious before using results from AutoPhOT in a publication - there are papers in prep that are using AutoPhOT light curves, but please speak to us first.
+* As this code is very much still under development and currently being developed and tested, you should be very cautious before using the results from AutoPhOT in a publication. This code is completely available to the community but please speak to me first.
 
-* The AutoPhOT paper is currently being written, for the time being please cite this [paper](https://arxiv.org/abs/2102.09572)
+* The AutoPhOT paper is currently being written, for the time being please cite this [paper](https://arxiv.org/abs/2102.09572).
 
 ## Testing and Debugging
 
