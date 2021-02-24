@@ -16,6 +16,10 @@ The novel pipeline is built from the ground up, based on Python3 and makes exten
 **Project is undergoing active development. AutoPhoT will include the Python executable code presented here, an interactive website with an accompanying API. Documentation is currently being written. Feedback is welcome.
 email: sean.brennan2@ucdconnect.ie**
 
+<p align="center">
+  <a href="https://www.buymeacoffee.com/astrosean" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
+</p>
+
 ## Developer notes
 
  * Colour terms still in testing/development and **not** in current build.
@@ -26,9 +30,7 @@ email: sean.brennan2@ucdconnect.ie**
 
  * Image subtraction is somewhat crude - pipeline can produce clean subtractions reliably but we suggest users to check all subtractions.
 
- <p align="center">
-   <a href="https://www.buymeacoffee.com/astrosean" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
- </p>
+
 
 ## Installation
 
