@@ -228,14 +228,10 @@ AutoPhOT_input:
   remove_boundary_sources: true
   pix_bound: 25
 
-  trim_edges: False
-  trim_edges_pixels: 25
-
   # min and max allow sources when doing source detection to find fwhm
   min_source_lim: 2
   max_source_lim: 500
   source_max_iter: 30
-
 
   plots_PSF_sources: False
   plots_PSF_residual: False
